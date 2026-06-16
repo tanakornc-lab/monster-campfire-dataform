@@ -2,7 +2,11 @@ config {
     type: "incremental",
     schema: "analytics_mart",
     name: "authentication_daily",
-    uniqueKey: ["event_date", "country", "os", "player_status"]
+    uniqueKey: ["event_date", "country", "os", "player_status"],
+    bigquery: {
+        partitionBy: "event_date",
+        clusterBy: ["country", "method"]
+    }
 }
 
 WITH
