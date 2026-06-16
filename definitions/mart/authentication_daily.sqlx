@@ -5,7 +5,7 @@ config {
     uniqueKey: ["event_date", "country", "os", "player_status"],
     bigquery: {
         partitionBy: "event_date",
-        clusterBy: ["country", "method"]
+        clusterBy: ["country"]
     }
 }
 
