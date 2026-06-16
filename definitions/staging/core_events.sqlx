@@ -6,44 +6,30 @@ config {
 }
 
 SELECT
-  DATE(TIMESTAMP_MICROS(event_timestamp), 'Asia/Bangkok') AS event_date,
-  TIMESTAMP_MICROS(event_timestamp) AS event_time,
-  user_pseudo_id,
-  event_name,
-  COALESCE(geo.country, '(not set)') AS country,
-  COALESCE(device.operating_system, '(not set)') AS os,
-  COALESCE((
-    SELECT
-      value.string_value
-    FROM
-      UNNEST(user_properties)
-    WHERE
-      KEY = 'player_status'), 'normal') AS player_status,
-  (
-  SELECT
-    value.int_value
-  FROM
-    UNNEST(event_params)
-  WHERE
-    KEY = 'ga_session_id') AS ga_session_id,
-  (
-  SELECT
-    value.int_value
-  FROM
-    UNNEST(event_params)
-  WHERE
-    KEY = 'engagement_time_msec') AS engagement_time_msec
+  DATE(TIMESTAMP_MICROS(t.event_timestamp), 'Asia/Bangkok') AS event_date,
+  TIMESTAMP_MICROS(t.event_timestamp) AS event_time,
+  t.user_pseudo_id,
+  t.event_name,
+  COALESCE(t.geo.country, '(not set)') AS country,
+  COALESCE(t.device.operating_system, '(not set)') AS os,
+  COALESCE(up.value.string_value, 'normal') AS player_status,
+  ep_session.value.int_value AS ga_session_id,
+  ep_engagement.value.int_value AS engagement_time_msec
 FROM
-  `monster-campfire.analytics_468762418.events_*`
+  (SELECT *, _TABLE_SUFFIX AS suffix FROM `monster-campfire.analytics_468762418.events_*`) AS t
+LEFT JOIN
+  UNNEST(t.user_properties) AS up
+  ON up.key = 'player_status'
+LEFT JOIN
+  UNNEST(t.event_params) AS ep_session
+  ON ep_session.key = 'ga_session_id'
+LEFT JOIN
+  UNNEST(t.event_params) AS ep_engagement
+  ON ep_engagement.key = 'engagement_time_msec'
+LEFT JOIN
+  UNNEST(t.event_params) AS ep_debug
+  ON ep_debug.key = 'debug_mode'
 WHERE
-  event_name IN ('first_open',
-    'session_start',
-    'user_engagement')
-  AND (
-  SELECT
-    value.int_value
-  FROM
-    UNNEST(event_params)
-  WHERE
-    KEY = 'debug_mode') IS DISTINCT FROM 1
-  AND _TABLE_SUFFIX >= FORMAT_DATE('%Y%m%d', DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 1 DAY))
+  t.event_name IN ('first_open', 'session_start', 'user_engagement')
+  AND ep_debug.value.int_value IS DISTINCT FROM 1
+  AND t.suffix >= FORMAT_DATE('%Y%m%d', DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 1 DAY))
