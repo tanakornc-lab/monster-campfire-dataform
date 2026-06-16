@@ -33,4 +33,4 @@ WHERE
   -- [Developer] Filter debug_mode
   AND ep_debug.value.int_value IS DISTINCT FROM 1
   -- [Developer] Bangkok-adjusted UTC date filter
-  AND t.suffix >= FORMAT_DATE('%Y%m%d', DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 1 DAY))
+  AND t.suffix >= FORMAT_DATE('%Y%m%d', DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 60 DAY))
