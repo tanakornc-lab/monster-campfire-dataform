@@ -13,7 +13,7 @@ SELECT
   CAST(player_status AS STRING) AS player_status,
   CAST(COUNT(DISTINCT user_pseudo_id) AS INT64) AS retained_users
 FROM
-  ${ref("retention_kpis")} ${when(incremental(), `WHERE event_date >= DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 7 DAY)`)}
+  ${ref("retention_kpis")} ${when(incremental(), `WHERE event_date >= DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 60 DAY)`)}
 GROUP BY
   1,
   2,

@@ -21,7 +21,7 @@ WITH
     COUNTIF(event_name = 'sign_up') > 0 AS is_signup,
     COUNTIF(event_name = 'login') > 0 AS is_login
   FROM
-    ${ref("authentication_events")} ${when(incremental(), `WHERE event_date >= DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 7 DAY)`)}
+    ${ref("authentication_events")} ${when(incremental(), `WHERE event_date >= DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 60 DAY)`)}
   GROUP BY
     1,
     2,
