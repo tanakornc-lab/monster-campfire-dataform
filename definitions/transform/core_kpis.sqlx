@@ -1,0 +1,20 @@
+config {
+    type: "view",
+    schema: "analytics_transform",
+    name: "core_kpis"
+}
+
+SELECT
+  event_date,
+  country,
+  os,
+  player_status,
+  CAST(COUNT(DISTINCT ga_session_id) AS INT64) AS total_sessions,
+  CAST(SUM(engagement_time_msec) AS INT64) AS total_engagement_msec
+FROM
+  ${ref("core_events")}
+GROUP BY
+  1,
+  2,
+  3,
+  4

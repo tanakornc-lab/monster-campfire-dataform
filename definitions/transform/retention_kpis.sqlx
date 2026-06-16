@@ -1,0 +1,34 @@
+config {
+    type: "view",
+    schema: "analytics_transform",
+    name: "retention_kpis",
+    description: "Maps users to their first_open date (anchor_date) for retention analysis"
+}
+
+WITH
+  user_anchors AS (
+  SELECT
+    user_pseudo_id,
+    MIN(event_date) AS anchor_date
+  FROM
+    ${ref("core_events")}
+  WHERE
+    event_name = 'first_open'
+  GROUP BY
+    1 )
+SELECT
+  e.event_date,
+  a.anchor_date,
+  e.user_pseudo_id,
+  e.country,
+  e.os,
+  e.player_status,
+  DATE_DIFF(e.event_date, a.anchor_date, DAY) AS days_since_first_open
+FROM
+  ${ref("core_events")} e
+JOIN
+  user_anchors a
+ON
+  e.user_pseudo_id = a.user_pseudo_id
+WHERE
+  e.event_name = 'session_start'

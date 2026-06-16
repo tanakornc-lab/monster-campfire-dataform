@@ -1,0 +1,56 @@
+config {
+    type: "incremental",
+    schema: "analytics_mart",
+    name: "core_daily",
+    uniqueKey: ["event_date", "country", "os", "player_status"]
+}
+
+WITH
+  staging_users AS (
+  SELECT
+    event_date,
+    country,
+    os,
+    player_status,
+    COUNT(DISTINCT user_pseudo_id) AS active_users,
+    COUNT(DISTINCT
+      CASE
+        WHEN event_name = 'first_open' THEN user_pseudo_id
+    END
+      ) AS new_users
+  FROM
+    ${ref("core_events")} ${when(incremental(), `WHERE event_date >= DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 7 DAY)`)}
+  GROUP BY
+    1,
+    2,
+    3,
+    4 ),
+  transform_metrics AS (
+  SELECT
+    event_date,
+    country,
+    os,
+    player_status,
+    total_sessions,
+    total_engagement_msec
+  FROM
+    ${ref("core_kpis")} ${when(incremental(), `WHERE event_date >= DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 7 DAY)`)} )
+SELECT
+  CAST(s.event_date AS DATE) AS event_date,
+  CAST(s.country AS STRING) AS country,
+  CAST(s.os AS STRING) AS os,
+  CAST(s.player_status AS STRING) AS player_status,
+  CAST(s.new_users AS INT64) AS new_users,
+  CAST(s.active_users AS INT64) AS active_users,
+  CAST(t.total_sessions AS INT64) AS total_sessions,
+  CAST(NULLIF(t.total_sessions, 0) / NULLIF(s.active_users, 0) AS FLOAT64) AS avg_sessions_per_user,
+  CAST((NULLIF(t.total_engagement_msec, 0) / 1000) / NULLIF(s.active_users, 0) AS FLOAT64) AS avg_engagement_sec_per_user
+FROM
+  staging_users s
+LEFT JOIN
+  transform_metrics t
+USING
+  (event_date,
+    country,
+    os,
+    player_status)

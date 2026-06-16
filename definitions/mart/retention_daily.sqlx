@@ -1,0 +1,22 @@
+config {
+    type: "incremental",
+    schema: "analytics_mart",
+    name: "retention_daily",
+    uniqueKey: ["anchor_date", "days_since_first_open", "country", "os", "player_status"]
+}
+
+SELECT
+  CAST(anchor_date AS DATE) AS anchor_date,
+  CAST(days_since_first_open AS INT64) AS days_since_first_open,
+  CAST(country AS STRING) AS country,
+  CAST(os AS STRING) AS os,
+  CAST(player_status AS STRING) AS player_status,
+  CAST(COUNT(DISTINCT user_pseudo_id) AS INT64) AS retained_users
+FROM
+  ${ref("retention_kpis")} ${when(incremental(), `WHERE event_date >= DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 7 DAY)`)}
+GROUP BY
+  1,
+  2,
+  3,
+  4,
+  5
