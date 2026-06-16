@@ -1,15 +1,17 @@
 config {
     type: "view",
     schema: "analytics_staging",
-    name: "core_events",
-    description: "Cleaned core events with player_status from user_properties"
+    name: "authentication_events",
+    description: "Cleaned authentication events extracting login/signup methods"
 }
 
 SELECT
+  -- [Developer] Timezone & Partition Boundary
   DATE(TIMESTAMP_MICROS(event_timestamp), 'Asia/Bangkok') AS event_date,
   TIMESTAMP_MICROS(event_timestamp) AS event_time,
   user_pseudo_id,
   event_name,
+  -- [Developer] Standard Dimensions
   COALESCE(geo.country, '(not set)') AS country,
   COALESCE(device.operating_system, '(not set)') AS os,
   COALESCE((
@@ -19,31 +21,28 @@ SELECT
       UNNEST(user_properties)
     WHERE
       KEY = 'player_status'), 'normal') AS player_status,
-  (
-  SELECT
-    value.int_value
-  FROM
-    UNNEST(event_params)
-  WHERE
-    KEY = 'ga_session_id') AS ga_session_id,
-  (
-  SELECT
-    value.int_value
-  FROM
-    UNNEST(event_params)
-  WHERE
-    KEY = 'engagement_time_msec') AS engagement_time_msec
+  -- [PO] Extracting authentication method (e.g., google, apple, guest)
+  LOWER(COALESCE((
+      SELECT
+        value.string_value
+      FROM
+        UNNEST(event_params)
+      WHERE
+        KEY = 'method'), 'unknown')) AS method
 FROM
   `monster-campfire.analytics_468762418.events_*`
 WHERE
-  event_name IN ('first_open',
-    'session_start',
-    'user_engagement')
+  event_name IN ('sign_up',
+    'login')
+  -- [Developer] Filter debug_mode
   AND (
   SELECT
     value.int_value
   FROM
     UNNEST(event_params)
   WHERE
-    KEY = 'debug_mode') IS DISTINCT FROM 1
+    KEY = 'debug_mode') IS DISTINCT
+FROM
+  1
+  -- [Developer] Bangkok-adjusted UTC date filter
   AND _TABLE_SUFFIX >= FORMAT_DATE('%Y%m%d', DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 1 DAY))

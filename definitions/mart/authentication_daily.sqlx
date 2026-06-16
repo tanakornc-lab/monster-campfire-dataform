@@ -1,0 +1,62 @@
+config {
+    type: "incremental",
+    schema: "analytics_mart",
+    name: "authentication_daily",
+    uniqueKey: ["event_date", "country", "os", "player_status"]
+}
+
+WITH
+  user_level_auth AS (
+    -- รวบรวมพฤติกรรมการล็อกอิน/สมัคร ของผู้เล่นแต่ละคนในวันนั้น
+  SELECT
+    event_date,
+    country,
+    os,
+    player_status,
+    user_pseudo_id,
+    -- เช็คว่าคนนี้มีการกระทำอะไรบ้าง (Return เป็น Boolean)
+    COUNTIF(event_name = 'sign_up') > 0 AS is_signup,
+    COUNTIF(event_name = 'login') > 0 AS is_login,
+    COUNTIF(event_name = 'sign_up'
+      AND method = 'guest') > 0 AS is_guest_signup,
+    COUNTIF(event_name = 'login'
+      AND method = 'guest') > 0 AS is_guest_login,
+    -- เช็คการใช้ Method สำหรับทำ Conversion Rate
+    COUNTIF(method = 'guest') > 0 AS has_guest_method,
+    COUNTIF(method IN ('google',
+        'apple',
+        'facebook',
+        'email')) > 0 AS has_linked_method
+  FROM
+    ${ref("authentication_events")} ${when(incremental(), `WHERE event_date >= DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 7 DAY)`)}
+  GROUP BY
+    1,
+    2,
+    3,
+    4,
+    5 )
+SELECT
+  CAST(event_date AS DATE) AS event_date,
+  CAST(country AS STRING) AS country,
+  CAST(os AS STRING) AS os,
+  CAST(player_status AS STRING) AS player_status,
+  -- KPI 1 & 2: All unique player sign-ups / logins
+  CAST(COUNTIF(is_signup) AS INT64) AS unique_signups,
+  CAST(COUNTIF(is_login) AS INT64) AS unique_logins,
+  -- KPI 3 & 4: All unique guest sign-ups / logins
+  CAST(COUNTIF(is_guest_signup) AS INT64) AS unique_guest_signups,
+  CAST(COUNTIF(is_guest_login) AS INT64) AS unique_guest_logins,
+  -- KPI 5: Guest-to-Linked Conversion Rate
+  -- หาจำนวนคนที่ "ใช้ทั้ง Guest และ Linked Method ในวันเดียวกัน"
+  CAST(COUNTIF(has_guest_method
+      AND has_linked_method) AS INT64) AS guest_to_linked_users,
+  -- คำนวณเป็นสัดส่วน (ใช้ SAFE_DIVIDE ป้องกัน Error ตัวหารเป็นศูนย์)
+  CAST( SAFE_DIVIDE( COUNTIF(has_guest_method
+        AND has_linked_method), COUNTIF(has_guest_method) ) AS FLOAT64 ) AS guest_to_linked_conversion_rate
+FROM
+  user_level_auth
+GROUP BY
+  1,
+  2,
+  3,
+  4
