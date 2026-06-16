@@ -2,7 +2,11 @@ config {
     type: "incremental",
     schema: "analytics_mart",
     name: "core_daily",
-    uniqueKey: ["event_date", "country", "os", "player_status"]
+    uniqueKey: ["event_date", "country", "os", "player_status"],
+    bigquery: {
+        partitionBy: "event_date",
+        clusterBy: ["country", "os"]
+    }
 }
 
 WITH
@@ -19,7 +23,7 @@ WITH
     END
       ) AS new_users
   FROM
-    ${ref("core_events")} ${when(incremental(), `WHERE event_date >= DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 7 DAY)`)}
+    ${ref("core_events")} ${when(incremental(), `WHERE event_date >= DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 60 DAY)`)}
   GROUP BY
     1,
     2,
@@ -34,7 +38,7 @@ WITH
     total_sessions,
     total_engagement_msec
   FROM
-    ${ref("core_kpis")} ${when(incremental(), `WHERE event_date >= DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 7 DAY)`)} )
+    ${ref("core_kpis")} ${when(incremental(), `WHERE event_date >= DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 60 DAY)`)} )
 SELECT
   CAST(s.event_date AS DATE) AS event_date,
   CAST(s.country AS STRING) AS country,
