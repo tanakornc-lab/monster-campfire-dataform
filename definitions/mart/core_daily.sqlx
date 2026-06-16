@@ -9,6 +9,28 @@ config {
     }
 }
 
+pre_operations {
+  BEGIN
+    DECLARE is_partitioned STRING;
+    IF EXISTS (
+      SELECT 1
+      FROM `${dataform.projectConfig.defaultDatabase}`.`region-asia-southeast1`.INFORMATION_SCHEMA.TABLES
+      WHERE table_schema = '${self.schema}' AND table_name = '${self.name}'
+    ) THEN
+      SET is_partitioned = (
+        SELECT is_partitioning_column
+        FROM `${dataform.projectConfig.defaultDatabase}`.`region-asia-southeast1`.INFORMATION_SCHEMA.COLUMNS
+        WHERE table_schema = '${self.schema}'
+          AND table_name = '${self.name}'
+          AND column_name = 'event_date'
+      );
+      IF is_partitioned = 'NO' THEN
+        DROP TABLE `${self.database}`.`${self.schema}`.`${self.name}`;
+      END IF;
+    END IF;
+  END
+}
+
 WITH
   staging_users AS (
   SELECT
