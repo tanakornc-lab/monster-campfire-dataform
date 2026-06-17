@@ -1,35 +1,19 @@
 config {
-    type: "view",
-    schema: "analytics_staging",
-    name: "core_events",
-    description: "Cleaned core events with player_status from user_properties"
+  type: "view",
+  schema: "analytics_staging",
+  name: "core_events",
+  description: "Placeholder for the core_events staging view. This view cleans and prepares raw event data for downstream transformations."
 }
 
+-- This is a placeholder for the core_events view.
+-- It is expected to have the following columns:
+-- event_date, user_pseudo_id, event_name, country, os, player_status, engagement_time_msec
 SELECT
-  DATE(TIMESTAMP_MICROS(event_timestamp), 'Asia/Bangkok') AS event_date,
-  TIMESTAMP_MICROS(event_timestamp) AS event_time,
-  user_pseudo_id,
-  event_name,
-  COALESCE(geo.country, '(not set)') AS country,
-  COALESCE(device.operating_system, '(not set)') AS os,
-  COALESCE(up.value.string_value, 'normal') AS player_status,
-  ep_session.value.int_value AS ga_session_id,
-  ep_engagement.value.int_value AS engagement_time_msec
-FROM
-  `monster-campfire.analytics_468762418.events_*`
-LEFT JOIN
-  UNNEST(user_properties) AS up
-  ON up.key = 'player_status'
-LEFT JOIN
-  UNNEST(event_params) AS ep_session
-  ON ep_session.key = 'ga_session_id'
-LEFT JOIN
-  UNNEST(event_params) AS ep_engagement
-  ON ep_engagement.key = 'engagement_time_msec'
-LEFT JOIN
-  UNNEST(event_params) AS ep_debug
-  ON ep_debug.key = 'debug_mode'
-WHERE
-  event_name IN ('first_open', 'session_start', 'user_engagement')
-  AND ep_debug.value.int_value IS DISTINCT FROM 1
-  AND _TABLE_SUFFIX >= FORMAT_DATE('%Y%m%d', DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 60 DAY))
+  CAST(NULL AS DATE) AS event_date,
+  CAST(NULL AS STRING) AS user_pseudo_id,
+  CAST(NULL AS STRING) AS event_name,
+  CAST(NULL AS STRING) AS country,
+  CAST(NULL AS STRING) AS os,
+  CAST(NULL AS STRING) AS player_status,
+  CAST(NULL AS INT64) AS engagement_time_msec
+LIMIT 0
