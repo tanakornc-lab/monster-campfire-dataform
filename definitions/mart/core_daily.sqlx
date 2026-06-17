@@ -1,71 +1,33 @@
 config {
-  type: "incremental",
-  schema: "analytics_mart",
-  name: "core_daily",
-  partitionBy: "event_date",
-  clusterBy: ["country", "os"],
-  uniqueKey: ["event_date", "country", "os", "player_status"],
-  description: "Daily aggregated core metrics for user activity.",
-  columns: {
-    event_date: "The date of the event in Asia/Bangkok timezone.",
-    country: "The country of the user.",
-    os: "The operating system of the user's device.",
-    player_status: "The status of the player (e.g., new, active, returning).",
-    total_users: "[CEO] Total number of unique users.",
-    active_users: "[PO] Number of unique users who were active (session_start, user_engagement, or first_open).",
-    new_users: "[Marketing] Number of unique users who opened the app for the first time.",
-    total_sessions: "[PO] Total number of sessions started.",
-    avg_sessions_per_user: "[PO] Average number of sessions per active user.",
-    avg_engagement_sec_per_user: "[Developer] Average engagement time in seconds per active user."
-  }
+    type: "incremental",
+    schema: "analytics_mart",
+    name: "core_daily",
+    uniqueKey: ["date", "country", "os", "player_status"],
+    bigquery: {
+        partitionBy: "date",
+        clusterBy: ["country", "os", "player_status"]
+    },
+    description: "Final Mart layer containing only the 7 new requested KPIs, optimized for BI reporting."
 }
 
-WITH base_data AS (
-  SELECT
-    event_date,
-    user_pseudo_id,
-    event_name,
-    engagement_time_msec,
-    player_status,
-    COALESCE(country, '(not set)') AS country,
-    COALESCE(os, '(not set)') AS os
-  FROM
-    ${ref("core_events")}
-  ${when(incremental(), `WHERE event_date >= DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 60 DAY)`)}
-),
-
-aggregated_metrics AS (
-  SELECT
-    event_date,
-    country,
-    os,
-    player_status,
-    COUNT(DISTINCT user_pseudo_id) AS total_users,
-    COUNT(DISTINCT CASE WHEN event_name IN ('session_start', 'user_engagement', 'first_open') THEN user_pseudo_id END) AS active_users,
-    COUNT(DISTINCT CASE WHEN event_name = 'first_open' THEN user_pseudo_id END) AS new_users,
-    COUNT(CASE WHEN event_name = 'session_start' THEN 1 END) AS total_sessions,
-    SUM(engagement_time_msec) AS total_engagement_msec
-  FROM
-    base_data
-  GROUP BY
-    1, 2, 3, 4
-)
-
 SELECT
-  -- Dimensions
-  event_date,
+  date,
   country,
   os,
   player_status,
-
-  -- [Volume Metrics - Additive / INT64]
-  CAST(total_users AS INT64) AS total_users,
-  CAST(active_users AS INT64) AS active_users,
-  CAST(new_users AS INT64) AS new_users,
-  CAST(total_sessions AS INT64) AS total_sessions,
-
-  -- [Quality Metrics - Non-Additive / FLOAT64]
-  CAST(total_sessions / NULLIF(active_users, 0) AS FLOAT64) AS avg_sessions_per_user,
-  CAST((total_engagement_msec / 1000) / NULLIF(active_users, 0) AS FLOAT64) AS avg_engagement_sec_per_user
+  total_users,
+  active_users,
+  new_users,
+  total_sessions,
+  avg_sessions_per_user,
+  avg_engagement_sec_per_user,
+  CURRENT_TIMESTAMP() AS updated_at
 FROM
-  aggregated_metrics
+  ${ref("core_kpis")}
+WHERE
+  ${
+      when(incremental(),
+          `date >= DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 3 DAY)`,
+          `date >= DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 90 DAY)`
+      )
+  }

@@ -2,49 +2,78 @@ config {
     type: "view",
     schema: "analytics_staging",
     name: "core_events",
-    description: "Cleaned row-level GA4 events with extracted params and Asia/Bangkok timezone. Filtered for Core KPIs only."
+    description: "Staging layer: Cleaned row-level GA4 events with necessary dimensions and metrics for KPI calculation.",
+    columns: {
+        user_pseudo_id: "Unique user ID",
+        event_date: "Date (Asia/Bangkok)",
+        event_name: "GA4 event name",
+        country: "User country",
+        os: "Operating System",
+        player_status: "Player status (vip or normal)",
+        ga_session_id: "Session ID",
+        engagement_time_sec: "Engagement time in seconds (FLOAT64)",
+        first_touch_date: "Date user first appeared"
+    }
 }
 
+WITH
+  raw_events AS (
+  SELECT
+    user_pseudo_id,
+    event_timestamp,
+    event_name,
+    COALESCE(geo.country, '(not set)') AS country,
+    COALESCE(device.operating_system, '(not set)') AS os,
+    (
+    SELECT
+      value.int_value
+    FROM
+      UNNEST(event_params)
+    WHERE
+      KEY = 'ga_session_id') AS ga_session_id,
+    COALESCE((
+      SELECT
+        value.int_value
+      FROM
+        UNNEST(event_params)
+      WHERE
+        KEY = 'engagement_time_msec'), 0) AS engagement_time_msec,
+    COALESCE( (
+      SELECT
+        value.string_value
+      FROM
+        UNNEST(user_properties)
+      WHERE
+        KEY = 'player_status'), 'normal' ) AS player_status,
+    DATE(TIMESTAMP_MICROS(NULLIF(user_first_touch_timestamp, 0)), 'Asia/Bangkok') AS first_touch_date
+  FROM
+    `monster-campfire.analytics_468762418.events_*`
+  WHERE
+    _TABLE_SUFFIX >= FORMAT_DATE('%Y%m%d', DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 90 DAY))
+    AND event_name IN ('session_start',
+      'first_open',
+      'user_engagement')
+    AND NOT EXISTS(
+    SELECT
+      1
+    FROM
+      UNNEST(event_params)
+    WHERE
+      KEY = 'debug_mode'
+      AND (value.string_value IS NOT NULL
+        OR value.int_value = 1) ) )
 SELECT
-  -- 1. Date & Time (แปลงเวลา Micros เป็น DATE เขตเวลาไทย)
-  DATE(TIMESTAMP_MICROS(event_timestamp), 'Asia/Bangkok') AS event_date,
-  -- 2. Core Identifiers
   user_pseudo_id,
+  DATE(TIMESTAMP_MICROS(event_timestamp), 'Asia/Bangkok') AS event_date,
   event_name,
-  -- 3. Standard Dimensions
-  geo.country AS country,
-  device.operating_system AS os,
-  -- 4. Extracted Event Params (แกะข้อมูลจาก Array ออกมาเป็นคอลัมน์ตรงๆ)
-  (
-  SELECT
-    value.string_value
-  FROM
-    UNNEST(event_params)
-  WHERE
-    KEY = 'player_status') AS player_status,
-  (
-  SELECT
-    value.int_value
-  FROM
-    UNNEST(event_params)
-  WHERE
-    KEY = 'engagement_time_msec') AS engagement_time_msec
+  country,
+  os,
+  player_status,
+  ga_session_id,
+  CAST(engagement_time_msec / 1000 AS FLOAT64) AS engagement_time_sec,
+  first_touch_date
 FROM
-  -- ⚠️ อย่าลืมเช็กชื่อโปรเจกต์กับไอดี Dataset ของ GA4 ให้ถูกต้องนะครับ
-  `monster-campfire.analytics_294326558.events_*`
+  raw_events
 WHERE
-  -- 🌟 [สกัดต้นทาง] ดึงเฉพาะ 3 Events นี้เท่านั้น! ตัดขยะอย่าง earn_virtual_currency ออกไปทันที
-  event_name IN ('first_open',
-    'session_start',
-    'user_engagement')
-  -- กรองข้อมูลจาก Debug Mode และป้องกันการดึงตาราง intraday
-  AND (
-  SELECT
-    value.int_value
-  FROM
-    UNNEST(event_params)
-  WHERE
-    KEY = 'debug_mode') IS DISTINCT
-FROM
-  1
-  AND _TABLE_SUFFIX NOT LIKE '%intraday%'
+  NOT (event_name = 'user_engagement'
+    AND engagement_time_msec = 0)

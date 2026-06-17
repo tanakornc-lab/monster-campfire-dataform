@@ -1,28 +1,83 @@
 config {
-  type: "view",
-  schema: "analytics_transform",
-  name: "core_kpis",
-  description: "Aggregated additive core metrics.",
-  columns: {
-    event_date: "The date of the event in Asia/Bangkok timezone.",
-    country: "The country of the user.",
-    os: "The operating system of the user\'s device.",
-    player_status: "The status of the player (e.g., new, active, returning).",
-    total_sessions: "[PO] Total number of sessions started.",
-    total_engagement_msec: "[Developer] Total engagement time in milliseconds.",
-    first_open_count: "[Marketing] Number of users who opened the app for the first time."
-  }
+    type: "table",
+    schema: "analytics_transform",
+    name: "core_kpis",
+    description: "Aggregated daily KPIs: Total users, DAU, Sessions, and Engagement metrics."
 }
 
+WITH
+  daily_user_session_stats AS (
+  SELECT
+    event_date,
+    country,
+    os,
+    player_status,
+    user_pseudo_id,
+    ga_session_id,
+    MAX(
+    IF
+      (event_name = 'first_open', 1, 0)) AS is_install,
+    MAX(
+    IF
+      (event_name = 'session_start', 1, 0)) AS is_session_start,
+    SUM(engagement_time_sec) AS session_eng_sec
+  FROM
+    ${ref("core_events")}
+  GROUP BY
+    1,
+    2,
+    3,
+    4,
+    5,
+    6 ),
+  user_daily_summary AS (
+  SELECT
+    event_date,
+    country,
+    os,
+    player_status,
+    user_pseudo_id,
+    MAX(
+    IF
+      (is_install = 1
+        AND is_session_start = 1, 1, 0)) AS is_new_game_user,
+    SUM(session_eng_sec) AS daily_total_eng_sec,
+    COUNT(ga_session_id) AS daily_session_count
+  FROM
+    daily_user_session_stats
+  GROUP BY
+    1,
+    2,
+    3,
+    4,
+    5 )
 SELECT
-  event_date,
-  COALESCE(country, '(not set)') AS country,
-  COALESCE(os, '(not set)') AS os,
+  event_date AS date,
+  country,
+  os,
   player_status,
-  CAST(COUNT(CASE WHEN event_name = 'session_start' THEN 1 END) AS INT64) AS total_sessions,
-  CAST(SUM(engagement_time_msec) AS INT64) AS total_engagement_msec,
-  CAST(COUNT(CASE WHEN event_name = 'first_open' THEN 1 END) AS INT64) AS first_open_count
+  CAST(COUNT(DISTINCT user_pseudo_id) AS INT64) AS total_users,
+  CAST(COUNT(DISTINCT
+      CASE
+        WHEN daily_session_count > 0 THEN user_pseudo_id
+    END
+      ) AS INT64) AS active_users,
+  CAST(SUM(is_new_game_user) AS INT64) AS new_users,
+  CAST(SUM(daily_session_count) AS INT64) AS total_sessions,
+  SAFE_DIVIDE(SUM(daily_session_count), NULLIF(COUNT(DISTINCT
+        CASE
+          WHEN daily_session_count > 0 THEN user_pseudo_id
+      END
+        ), 0)) AS avg_sessions_per_user,
+  SAFE_DIVIDE(SUM(daily_total_eng_sec), NULLIF(COUNT(DISTINCT
+        CASE
+          WHEN daily_session_count > 0 THEN user_pseudo_id
+      END
+        ), 0)) AS avg_engagement_sec_per_user
 FROM
-  ${ref("core_events")}
+  user_daily_summary
 GROUP BY
-  1, 2, 3, 4
+  1,
+  2,
+  3,
+  4
