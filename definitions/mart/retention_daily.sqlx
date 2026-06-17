@@ -1,0 +1,112 @@
+config {
+    type: "table",
+    schema: "analytics_mart",
+    name: "retention_daily",
+    bigquery: {
+        partitionBy: "cohort_date",
+        clusterBy: ["country", "os", "player_status"]
+    },
+    description: "ตารางสรุปผลข้อมูลสถิติ Retention Matrix แบบยาว (Long Format) รองรับการทำ Heatmap ใน Looker Studio (KPI-R01, KPI-R03)",
+    columns: {
+        cohort_date: "วันที่ผู้ใช้เปิดเข้าเล่นเกมเป็นครั้งแรก",
+        day_n: "จำนวนระยะเวลาวันนับจากวันแรกสมัคร (0 ถึง 30)",
+        country: "ประเทศของกลุ่มผู้ใช้",
+        os: "ระบบปฏิบัติการโมบายล์",
+        player_status: "สถานะผู้เล่นแบบตรึงถาวรล่าสุด (Latest Snapshot)",
+        cohort_size: "จำนวนประชากรตั้งต้นในกลุ่ม Cohort วันนั้น",
+        retained_users: "จำนวนผู้เล่นที่เปิดกลับเข้ามา active ตรงวันน่ะพอดี",
+        retention_pct: "เปอร์เซ็นต์อัตราการกลับมาเล่นซ้ำรายวัน (Day-N Retention Rate)"
+    }
+}
+
+WITH cohort_profiles AS (
+  SELECT
+    cohort_date,
+    country,
+    os,
+    player_status_latest AS player_status,
+    user_pseudo_id
+  FROM
+    ${ref("retention_kpis")}
+),
+
+cohort_sizes AS (
+  SELECT
+    cohort_date,
+    country,
+    os,
+    player_status,
+    COUNT(DISTINCT user_pseudo_id) AS cohort_size
+  FROM
+    cohort_profiles
+  GROUP BY
+    1, 2, 3, 4
+),
+
+-- กฎ 2/3: เตรียมโครงสร้างวนรอบ Day 0 ถึง Day 30 เพื่อเขียน Grid Heatmap
+day_series AS (
+  SELECT day_n FROM UNNEST(GENERATE_ARRAY(0, 30)) AS day_n
+),
+
+matrix_grid AS (
+  SELECT
+    cs.cohort_date,
+    ds.day_n,
+    cs.country,
+    cs.os,
+    cs.player_status,
+    cs.cohort_size
+  FROM
+    cohort_sizes cs
+  CROSS JOIN
+    day_series ds
+),
+
+actual_retained_counts AS (
+  SELECT
+    cb.cohort_date,
+    da.day_n,
+    cb.country,
+    cb.os,
+    cb.player_status_latest AS player_status,
+    COUNT(DISTINCT da.user_pseudo_id) AS retained_users
+  FROM
+    ${ref("stickiness_kpis")} da
+  INNER JOIN
+    ${ref("retention_kpis")} cb
+  ON
+    da.user_pseudo_id = cb.user_pseudo_id
+  GROUP BY
+    1, 2, 3, 4, 5
+)
+
+SELECT
+  SAFE_CAST(g.cohort_date AS DATE) AS cohort_date,
+  SAFE_CAST(g.day_n AS INT64) AS day_n,
+  g.country,
+  g.os,
+  g.player_status,
+  SAFE_CAST(g.cohort_size AS INT64) AS cohort_size,
+  
+  -- กฎ 1.3: ใช้ Maturity Guard ป้องกันตัวเลขตกใจ (ถ้า Cohort นั้นอายุยังไม่ถึงวันที่ N ให้ดรอปค่าเป็น NULL ทันที)
+  IF(
+    DATE_DIFF(CURRENT_DATE('Asia/Bangkok'), g.cohort_date, DAY) < g.day_n,
+    NULL,
+    SAFE_CAST(COALESCE(r.retained_users, 0) AS INT64)
+  ) AS retained_users,
+
+  IF(
+    DATE_DIFF(CURRENT_DATE('Asia/Bangkok'), g.cohort_date, DAY) < g.day_n,
+    NULL,
+    SAFE_CAST(SAFE_DIVIDE(COALESCE(r.retained_users, 0), NULLIF(g.cohort_size, 0)) * 100 AS FLOAT64)
+  ) AS retention_pct
+FROM
+  matrix_grid g
+LEFT JOIN
+  actual_retained_counts r
+ON
+  g.cohort_date = r.cohort_date
+  AND g.day_n = r.day_n
+  AND g.country = r.country
+  AND g.os = r.os
+  AND g.player_status = r.player_status

@@ -1,0 +1,83 @@
+config {
+    type: "table",
+    schema: "analytics_mart",
+    name: "stickiness_daily",
+    bigquery: {
+        partitionBy: "date",
+        clusterBy: ["country", "os", "player_status"]
+    },
+    description: "ตารางวิเคราะห์ความคุ้มค่าและความผูกพันรายวันของตัวชี้วัดกลุ่มผลิตภัณฑ์ Stickiness DAU / MAU (KPI-R02)",
+    columns: {
+        date: "วันที่สรุปพฤติกรรมรายงานผล",
+        country: "ประเทศของกลุ่มผู้ใช้",
+        os: "ระบบปฏิบัติการโมบายล์",
+        player_status: "สถานะผู้เล่น ณ สิ้นวัน (End-of-Day)",
+        dau: "จำนวนผู้ใช้งานรายวันจริง (Daily Active Users)",
+        mau_28d: "จำนวนผู้ใช้งานสะสมย้อนหลังแบบเคลื่อนที่ 28 วัน (Rolling Monthly Active Users)",
+        stickiness_pct: "ค่าร้อยละดัชนีความเหนียวแน่นผูกพันต่อเกม (DAU/MAU * 100)"
+    }
+}
+
+WITH daily_active_log AS (
+  SELECT
+    date,
+    country,
+    os,
+    player_status_eod AS player_status,
+    user_pseudo_id
+  FROM
+    ${ref("stickiness_kpis")}
+),
+
+distinct_dates AS (
+  SELECT DISTINCT date FROM daily_active_log
+),
+
+-- คำนวณหา MAU ย้อนหลัง 28 วันโดยใช้กลไกการสแกนแบบช่วงหน้าต่างเวลาสากล
+mau_calculation AS (
+  SELECT
+    d.date,
+    a.country,
+    a.os,
+    a.player_status,
+    COUNT(DISTINCT a.user_pseudo_id) AS mau_28d
+  FROM
+    distinct_dates d
+  INNER JOIN
+    daily_active_log a
+  ON
+    a.date BETWEEN DATE_SUB(d.date, INTERVAL 27 DAY) AND d.date
+  GROUP BY
+    1, 2, 3, 4
+),
+
+dau_calculation AS (
+  SELECT
+    date,
+    country,
+    os,
+    player_status,
+    COUNT(DISTINCT user_pseudo_id) AS dau
+  FROM
+    daily_active_log
+  GROUP BY
+    1, 2, 3, 4
+)
+
+SELECT
+  SAFE_CAST(d.date AS DATE) AS date,
+  d.country,
+  d.os,
+  d.player_status,
+  SAFE_CAST(d.dau AS INT64) AS dau,
+  SAFE_CAST(COALESCE(m.mau_28d, 0) AS INT64) AS mau_28d,
+  SAFE_CAST(SAFE_DIVIDE(d.dau, NULLIF(COALESCE(m.mau_28d, 0), 0)) * 100 AS FLOAT64) AS stickiness_pct
+FROM
+  dau_calculation d
+LEFT JOIN
+  mau_calculation m
+ON
+  d.date = m.date
+  AND d.country = m.country
+  AND d.os = m.os
+  AND d.player_status = m.player_status
