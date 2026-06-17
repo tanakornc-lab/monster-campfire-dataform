@@ -1,19 +1,50 @@
 config {
-  type: "view",
-  schema: "analytics_staging",
-  name: "core_events",
-  description: "Placeholder for the core_events staging view. This view cleans and prepares raw event data for downstream transformations."
+    type: "view",
+    schema: "analytics_staging",
+    name: "core_events",
+    description: "Cleaned row-level GA4 events with extracted params and Asia/Bangkok timezone. Filtered for Core KPIs only."
 }
 
--- This is a placeholder for the core_events view.
--- It is expected to have the following columns:
--- event_date, user_pseudo_id, event_name, country, os, player_status, engagement_time_msec
 SELECT
-  CAST(NULL AS DATE) AS event_date,
-  CAST(NULL AS STRING) AS user_pseudo_id,
-  CAST(NULL AS STRING) AS event_name,
-  CAST(NULL AS STRING) AS country,
-  CAST(NULL AS STRING) AS os,
-  CAST(NULL AS STRING) AS player_status,
-  CAST(NULL AS INT64) AS engagement_time_msec
-LIMIT 0
+  -- 1. Date & Time (แปลงเวลา Micros เป็น DATE เขตเวลาไทย)
+  DATE(TIMESTAMP_MICROS(event_timestamp), 'Asia/Bangkok') AS event_date,
+  -- 2. Core Identifiers
+  user_pseudo_id,
+  event_name,
+  -- 3. Standard Dimensions
+  geo.country AS country,
+  device.operating_system AS os,
+  -- 4. Extracted Event Params (แกะข้อมูลจาก Array ออกมาเป็นคอลัมน์ตรงๆ)
+  (
+  SELECT
+    value.string_value
+  FROM
+    UNNEST(event_params)
+  WHERE
+    KEY = 'player_status') AS player_status,
+  (
+  SELECT
+    value.int_value
+  FROM
+    UNNEST(event_params)
+  WHERE
+    KEY = 'engagement_time_msec') AS engagement_time_msec
+FROM
+  -- ⚠️ อย่าลืมเช็กชื่อโปรเจกต์กับไอดี Dataset ของ GA4 ให้ถูกต้องนะครับ
+  `monster-campfire.analytics_294326558.events_*`
+WHERE
+  -- 🌟 [สกัดต้นทาง] ดึงเฉพาะ 3 Events นี้เท่านั้น! ตัดขยะอย่าง earn_virtual_currency ออกไปทันที
+  event_name IN ('first_open',
+    'session_start',
+    'user_engagement')
+  -- กรองข้อมูลจาก Debug Mode และป้องกันการดึงตาราง intraday
+  AND (
+  SELECT
+    value.int_value
+  FROM
+    UNNEST(event_params)
+  WHERE
+    KEY = 'debug_mode') IS DISTINCT
+FROM
+  1
+  AND _TABLE_SUFFIX NOT LIKE '%intraday%'
