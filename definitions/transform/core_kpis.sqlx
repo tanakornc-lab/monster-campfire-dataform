@@ -1,0 +1,28 @@
+config {
+  type: "view",
+  schema: "analytics_transform",
+  name: "core_kpis",
+  description: "Aggregated additive core metrics.",
+  columns: {
+    event_date: "The date of the event in Asia/Bangkok timezone.",
+    country: "The country of the user.",
+    os: "The operating system of the user\'s device.",
+    player_status: "The status of the player (e.g., new, active, returning).",
+    total_sessions: "[PO] Total number of sessions started.",
+    total_engagement_msec: "[Developer] Total engagement time in milliseconds.",
+    first_open_count: "[Marketing] Number of users who opened the app for the first time."
+  }
+}
+
+SELECT
+  event_date,
+  COALESCE(country, '(not set)') AS country,
+  COALESCE(os, '(not set)') AS os,
+  player_status,
+  CAST(COUNT(CASE WHEN event_name = 'session_start' THEN 1 END) AS INT64) AS total_sessions,
+  CAST(SUM(engagement_time_msec) AS INT64) AS total_engagement_msec,
+  CAST(COUNT(CASE WHEN event_name = 'first_open' THEN 1 END) AS INT64) AS first_open_count
+FROM
+  ${ref("core_events")}
+GROUP BY
+  1, 2, 3, 4
