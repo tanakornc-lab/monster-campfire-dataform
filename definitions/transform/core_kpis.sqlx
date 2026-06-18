@@ -70,21 +70,27 @@ WITH
     3,
     4 )
 SELECT
-  *,
-  SAFE_DIVIDE( LAG(dau) OVER (PARTITION BY country, os, player_status ORDER BY date) -
-    (
+  m.*,
+  SAFE_DIVIDE( prev.dau - (
     SELECT
-      COUNT(DISTINCT a.user_pseudo_id)
+      COUNT(DISTINCT b.user_pseudo_id)
     FROM
-      user_daily_summary a
+      user_daily_summary b
     WHERE
-      a.date = m.date
-      AND a.user_pseudo_id IN (
+      b.date = m.date
+      AND b.user_pseudo_id IN (
       SELECT
         user_pseudo_id
       FROM
-        user_daily_summary b
+        user_daily_summary c
       WHERE
-        b.date = DATE_SUB(m.date, INTERVAL 1 DAY))), NULLIF(LAG(dau) OVER (PARTITION BY country, os, player_status ORDER BY date), 0) ) AS churn_rate
+        c.date = DATE_SUB(m.date, INTERVAL 1 DAY)) ), NULLIF(prev.dau, 0) ) AS churn_rate
 FROM
   metrics_base m
+LEFT JOIN
+  metrics_base PREV
+ON
+  m.date = DATE_ADD(prev.date, INTERVAL 1 DAY)
+  AND m.country = prev.country
+  AND m.os = prev.os
+  AND m.player_status = prev.player_status
