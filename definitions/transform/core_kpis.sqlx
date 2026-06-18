@@ -6,91 +6,43 @@ config {
 }
 
 WITH
-  daily_user_session_stats AS (
+  daily_metrics AS (
   SELECT
-    event_date,
+    event_date AS date,
     country,
     os,
     player_status,
-    user_pseudo_id,
-    ga_session_id,
-    MAX(
+    COUNT(DISTINCT user_pseudo_id) AS dau,
+    SUM(
     IF
-      (event_name = 'first_open', 1, 0)) AS is_install,
-    MAX(
-    IF
-      (event_name = 'session_start', 1, 0)) AS is_session_start,
-    SUM(engagement_time_sec) AS session_eng_sec
+      (event_name = 'first_open'
+        AND event_name = 'session_start', 1, 0)) AS new_users,
+    COUNT(ga_session_id) AS total_sessions,
+    SUM(engagement_time_sec) AS total_eng_sec
   FROM
     ${ref("core_events")}
   GROUP BY
     1,
     2,
     3,
-    4,
-    5,
-    6 ),
-  user_daily_summary AS (
+    4 ),
+  metrics_with_lag AS (
   SELECT
-    event_date AS date,
-    country,
-    os,
-    player_status,
-    user_pseudo_id,
-    MAX(
-    IF
-      (is_install = 1
-        AND is_session_start = 1, 1, 0)) AS is_new_game_user,
-    SUM(session_eng_sec) AS daily_total_eng_sec,
-    COUNT(ga_session_id) AS daily_session_count
+    *,
+    LAG(dau) OVER (PARTITION BY country, os, player_status ORDER BY date) AS prev_dau
   FROM
-    daily_user_session_stats
-  GROUP BY
-    1,
-    2,
-    3,
-    4,
-    5 ),
-  metrics_base AS (
-  SELECT
-    date,
-    country,
-    os,
-    player_status,
-    COUNT(DISTINCT user_pseudo_id) AS dau,
-    SUM(is_new_game_user) AS new_users,
-    SUM(daily_session_count) AS total_sessions,
-    SAFE_DIVIDE(SUM(daily_session_count), COUNT(DISTINCT user_pseudo_id)) AS avg_sessions_per_user,
-    SAFE_DIVIDE(SUM(daily_total_eng_sec), COUNT(DISTINCT user_pseudo_id)) AS avg_engagement_sec_per_user
-  FROM
-    user_daily_summary
-  GROUP BY
-    1,
-    2,
-    3,
-    4 )
+    daily_metrics )
+  -- 3. รวมผลลัพธ์
 SELECT
-  m.*,
-  SAFE_DIVIDE( prev.dau - (
-    SELECT
-      COUNT(DISTINCT b.user_pseudo_id)
-    FROM
-      user_daily_summary b
-    WHERE
-      b.date = m.date
-      AND b.user_pseudo_id IN (
-      SELECT
-        user_pseudo_id
-      FROM
-        user_daily_summary c
-      WHERE
-        c.date = DATE_SUB(m.date, INTERVAL 1 DAY)) ), NULLIF(prev.dau, 0) ) AS churn_rate
+  date,
+  country,
+  os,
+  player_status,
+  dau,
+  new_users,
+  total_sessions,
+  SAFE_DIVIDE(total_sessions, NULLIF(dau, 0)) AS avg_sessions_per_user,
+  SAFE_DIVIDE(total_eng_sec, NULLIF(dau, 0)) AS avg_engagement_sec_per_user,
+  SAFE_DIVIDE(prev_dau - dau, NULLIF(prev_dau, 0)) AS churn_rate
 FROM
-  metrics_base m
-LEFT JOIN
-  metrics_base PREV
-ON
-  m.date = DATE_ADD(prev.date, INTERVAL 1 DAY)
-  AND m.country = prev.country
-  AND m.os = prev.os
-  AND m.player_status = prev.player_status
+  metrics_with_lag
