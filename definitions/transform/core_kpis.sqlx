@@ -2,7 +2,7 @@ config {
     type: "table",
     schema: "analytics_transform",
     name: "core_kpis",
-    description: "Aggregated daily KPIs: DAU, Sessions, and Engagement metrics."
+    description: "Daily KPIs including DAU, Sessions, Engagement, and Churn Rate."
 }
 
 WITH
@@ -32,7 +32,7 @@ WITH
     6 ),
   user_daily_summary AS (
   SELECT
-    event_date,
+    event_date AS date,
     country,
     os,
     player_status,
@@ -50,21 +50,41 @@ WITH
     2,
     3,
     4,
-    5 )
+    5 ),
+  metrics_base AS (
+  SELECT
+    date,
+    country,
+    os,
+    player_status,
+    COUNT(DISTINCT user_pseudo_id) AS dau,
+    SUM(is_new_game_user) AS new_users,
+    SUM(daily_session_count) AS total_sessions,
+    SAFE_DIVIDE(SUM(daily_session_count), COUNT(DISTINCT user_pseudo_id)) AS avg_sessions_per_user,
+    SAFE_DIVIDE(SUM(daily_total_eng_sec), COUNT(DISTINCT user_pseudo_id)) AS avg_engagement_sec_per_user
+  FROM
+    user_daily_summary
+  GROUP BY
+    1,
+    2,
+    3,
+    4 )
 SELECT
-  event_date AS date,
-  country,
-  os,
-  player_status,
-  CAST(COUNT(DISTINCT user_pseudo_id) AS INT64) AS dau,
-  CAST(SUM(is_new_game_user) AS INT64) AS new_users,
-  CAST(SUM(daily_session_count) AS INT64) AS total_sessions,
-  SAFE_DIVIDE(SUM(daily_session_count), NULLIF(COUNT(DISTINCT user_pseudo_id), 0)) AS avg_sessions_per_user,
-  SAFE_DIVIDE(SUM(daily_total_eng_sec), NULLIF(COUNT(DISTINCT user_pseudo_id), 0)) AS avg_engagement_sec_per_user
+  *,
+  SAFE_DIVIDE( LAG(dau) OVER (PARTITION BY country, os, player_status ORDER BY date) -
+    (
+    SELECT
+      COUNT(DISTINCT a.user_pseudo_id)
+    FROM
+      user_daily_summary a
+    WHERE
+      a.date = m.date
+      AND a.user_pseudo_id IN (
+      SELECT
+        user_pseudo_id
+      FROM
+        user_daily_summary b
+      WHERE
+        b.date = DATE_SUB(m.date, INTERVAL 1 DAY))), NULLIF(LAG(dau) OVER (PARTITION BY country, os, player_status ORDER BY date), 0) ) AS churn_rate
 FROM
-  user_daily_summary
-GROUP BY
-  1,
-  2,
-  3,
-  4
+  metrics_base m
