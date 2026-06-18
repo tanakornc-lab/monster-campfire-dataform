@@ -7,19 +7,21 @@ config {
         partitionBy: "date",
         clusterBy: ["country", "os", "player_status"]
     },
-    description: "Final Mart layer containing all KPIs including DAU and Churn Rate.",
+    description: "Final Mart layer containing optimized Core KPIs and 28-day Stickiness (MAU) for BI reporting and Looker Studio dashboards.",
     columns: {
-        date: "วันที่เกิดกิจกรรม",
+        date: "วันที่เกิดกิจกรรม (อิงตามเวลา Asia/Bangkok)",
         country: "ประเทศของผู้ใช้งาน",
-        os: "ระบบปฏิบัติการ (iOS หรือ Android)",
-        player_status: "สถานะผู้เล่น (vip หรือ normal)",
+        os: "ระบบปฏิบัติการที่ใช้งาน (iOS หรือ Android)",
+        player_status: "สถานะกลุ่มผู้เล่น (vip หรือ normal)",
         dau: "จำนวนผู้เล่นที่เข้ามาใช้งานจริงในวันนั้นแบบไม่ซ้ำกัน (Daily Active Users)",
-        churn_rate: "อัตราผู้เล่นที่เลิกใช้งานเมื่อเทียบกับวันก่อนหน้า (Churn Rate)",
-        new_users: "จำนวนผู้เล่นใหม่ที่เปิดเกมครั้งแรก",
-        total_sessions: "ยอดรวมจำนวนรอบการเข้าเล่นเกมทั้งหมด",
-        avg_sessions_per_user: "ค่าเฉลี่ยจำนวนรอบการเข้าเกมต่อผู้ใช้",
-        avg_engagement_sec_per_user: "ค่าเฉลี่ยเวลาที่ใช้เล่นเกมจริงต่อผู้ใช้ (วินาที)",
-        updated_at: "เวลาที่ข้อมูลถูกอัปเดตล่าสุด"
+        mau_28d: "จำนวนผู้เล่นสะสมย้อนหลัง 28 วันแบบไม่ซ้ำกัน (Monthly Active Users)",
+        stickiness_pct: "อัตราความยึดมั่นหรือความถี่ในการกลับมาเล่นเกม คำนวณจาก DAU / MAU * 100 (%)",
+        new_users: "จำนวนผู้เล่นใหม่ที่เปิดเกมครั้งแรกในวันนั้น (first_open)",
+        total_sessions: "ยอดรวมจำนวนรอบการเข้าเล่นเกมทั้งหมดในวันนั้น (session_start)",
+        avg_sessions_per_user: "ค่าเฉลี่ยจำนวนรอบการเข้าเล่นเกมต่อผู้ใช้ (Sessions / DAU)",
+        avg_engagement_sec_per_user: "ค่าเฉลี่ยเวลาที่ใช้เล่นเกมจริงต่อผู้ใช้ในวันนั้น (วินาที)",
+        churn_rate: "อัตราการสูญเสียผู้เล่นเปรียบเทียบกับวันก่อนหน้า (หากค่าติดลบ หมายถึงฐานผู้เล่นในมิตินั้นกำลังเติบโต)",
+        updated_at: "เวลาที่ข้อมูลในแถวนี้ถูกประมวลผลและอัปเดล่าสุด"
     }
 }
 
@@ -29,11 +31,14 @@ SELECT
   os,
   player_status,
   dau,
-  churn_rate,
+  mau_28d,
+  stickiness_pct,
   new_users,
   total_sessions,
   avg_sessions_per_user,
   avg_engagement_sec_per_user,
+  churn_rate,
+  -- เก็บประวัติเวลาที่อัปเดตข้อมูลแถวนี้เพื่อใช้ตรวจสอบ (Audit)
   CURRENT_TIMESTAMP() AS updated_at
 FROM
   ${ref("core_kpis")}

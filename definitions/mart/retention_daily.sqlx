@@ -19,36 +19,37 @@ config {
     }
 }
 
-WITH cohort_profiles AS (
+WITH
+  cohort_profiles AS (
   SELECT
     cohort_date,
     country,
     os,
     player_status_latest AS player_status,
-    user_pseudo_id
+    resolved_user_id
   FROM
-    ${ref("retention_kpis")}
-),
-
-cohort_sizes AS (
+    ${ref("retention_kpis")} ),
+  cohort_sizes AS (
   SELECT
     cohort_date,
     country,
     os,
     player_status,
-    COUNT(DISTINCT user_pseudo_id) AS cohort_size
+    COUNT(DISTINCT resolved_user_id) AS cohort_size
   FROM
     cohort_profiles
   GROUP BY
-    1, 2, 3, 4
-),
-
--- กฎ 2/3: เตรียมโครงสร้างวนรอบ Day 0 ถึง Day 30 เพื่อเขียน Grid Heatmap
-day_series AS (
-  SELECT day_n FROM UNNEST(GENERATE_ARRAY(0, 30)) AS day_n
-),
-
-matrix_grid AS (
+    1,
+    2,
+    3,
+    4 ),
+  -- กฎ 2/3: เตรียมโครงสร้างวนรอบ Day 0 ถึง Day 30 เพื่อเขียน Grid Heatmap
+  day_series AS (
+  SELECT
+    day_n
+  FROM
+    UNNEST(GENERATE_ARRAY(0, 30)) AS day_n ),
+  matrix_grid AS (
   SELECT
     cs.cohort_date,
     ds.day_n,
@@ -59,27 +60,31 @@ matrix_grid AS (
   FROM
     cohort_sizes cs
   CROSS JOIN
-    day_series ds
-),
-
-actual_retained_counts AS (
+    day_series ds ),
+  -- คำนวณยอดกลับมาเล่นซ้ำ โดยคำนวณ Day-N ตรงจาก core_events แทนตาราง stickiness_kpis ที่ถูกยุบไป
+  actual_retained_counts AS (
   SELECT
     cb.cohort_date,
-    da.day_n,
+    DATE_DIFF(ce.event_date, cb.cohort_date, DAY) AS day_n,
     cb.country,
     cb.os,
     cb.player_status_latest AS player_status,
-    COUNT(DISTINCT da.user_pseudo_id) AS retained_users
+    COUNT(DISTINCT ce.resolved_user_id) AS retained_users
   FROM
-    ${ref("stickiness_kpis")} da
+    ${ref("core_events")} ce
   INNER JOIN
     ${ref("retention_kpis")} cb
   ON
-    da.user_pseudo_id = cb.user_pseudo_id
+    ce.resolved_user_id = cb.resolved_user_id
+  WHERE
+    DATE_DIFF(ce.event_date, cb.cohort_date, DAY) BETWEEN 0
+    AND 30
   GROUP BY
-    1, 2, 3, 4, 5
-)
-
+    1,
+    2,
+    3,
+    4,
+    5 )
 SELECT
   SAFE_CAST(g.cohort_date AS DATE) AS cohort_date,
   SAFE_CAST(g.day_n AS INT64) AS day_n,
@@ -87,19 +92,11 @@ SELECT
   g.os,
   g.player_status,
   SAFE_CAST(g.cohort_size AS INT64) AS cohort_size,
-  
   -- กฎ 1.3: ใช้ Maturity Guard ป้องกันตัวเลขตกใจ (ถ้า Cohort นั้นอายุยังไม่ถึงวันที่ N ให้ดรอปค่าเป็น NULL ทันที)
-  IF(
-    DATE_DIFF(CURRENT_DATE('Asia/Bangkok'), g.cohort_date, DAY) < g.day_n,
-    NULL,
-    SAFE_CAST(COALESCE(r.retained_users, 0) AS INT64)
-  ) AS retained_users,
-
-  IF(
-    DATE_DIFF(CURRENT_DATE('Asia/Bangkok'), g.cohort_date, DAY) < g.day_n,
-    NULL,
-    SAFE_CAST(SAFE_DIVIDE(COALESCE(r.retained_users, 0), NULLIF(g.cohort_size, 0)) AS FLOAT64)
-  ) AS retention_pct
+IF
+  ( DATE_DIFF(CURRENT_DATE('Asia/Bangkok'), g.cohort_date, DAY) < g.day_n, NULL, SAFE_CAST(COALESCE(r.retained_users, 0) AS INT64) ) AS retained_users,
+IF
+  ( DATE_DIFF(CURRENT_DATE('Asia/Bangkok'), g.cohort_date, DAY) < g.day_n, NULL, SAFE_CAST(SAFE_DIVIDE(COALESCE(r.retained_users, 0), NULLIF(g.cohort_size, 0)) AS FLOAT64) ) AS retention_pct
 FROM
   matrix_grid g
 LEFT JOIN

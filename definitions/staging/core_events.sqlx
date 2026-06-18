@@ -2,17 +2,19 @@ config {
     type: "view",
     schema: "analytics_staging",
     name: "core_events",
-    description: "Staging layer: Cleaned row-level GA4 events with necessary dimensions and metrics for KPI calculation.",
+    description: "Staging layer: Cleaned row-level GA4 events with resolved identity, strict type safety, and accurate BKK timezone mapping.",
     columns: {
-        user_pseudo_id: "Unique user ID",
-        event_date: "Date (Asia/Bangkok)",
-        event_name: "GA4 event name",
-        country: "User country",
-        os: "Operating System",
-        player_status: "Player status (vip or normal)",
-        ga_session_id: "Session ID",
-        engagement_time_sec: "Engagement time in seconds (FLOAT64)",
-        first_touch_date: "Date user first appeared"
+        user_pseudo_id: "Device ID ดั้งเดิมจาก GA4",
+        user_id: "Logged-in User ID (ถ้ามี)",
+        resolved_user_id: "Best available identifier (ใช้ user_id เป็นหลัก ถ้าไม่มีใช้ user_pseudo_id)",
+        event_date: "วันที่เกิด Event (อิงตามเวลา Asia/Bangkok)",
+        event_name: "ชื่อ Event จาก GA4",
+        country: "ประเทศของผู้ใช้งาน (Default: '(not set)')",
+        os: "ระบบปฏิบัติการ (Default: '(not set)')",
+        player_status: "สถานะผู้เล่น (Default: 'normal')",
+        ga_session_id: "Session ID สำหรับนับจำนวนการเล่น",
+        engagement_time_sec: "ระยะเวลาที่เล่นจริง (วินาที)",
+        first_touch_date: "วันที่ผู้เล่นเข้ามาเล่นเกมเป็นครั้งแรก (อิงเวลา Asia/Bangkok)"
     }
 }
 
@@ -20,6 +22,7 @@ WITH
   raw_events AS (
   SELECT
     user_pseudo_id,
+    user_id,
     event_timestamp,
     event_name,
     COALESCE(geo.country, '(not set)') AS country,
@@ -38,21 +41,23 @@ WITH
         UNNEST(event_params)
       WHERE
         KEY = 'engagement_time_msec'), 0) AS engagement_time_msec,
-    COALESCE( (
+    COALESCE((
       SELECT
         value.string_value
       FROM
         UNNEST(user_properties)
       WHERE
-        KEY = 'player_status'), 'normal' ) AS player_status,
-    DATE(TIMESTAMP_MICROS(NULLIF(user_first_touch_timestamp, 0)), 'Asia/Bangkok') AS first_touch_date
+        KEY = 'player_status'), 'normal') AS player_status,
+    user_first_touch_timestamp
   FROM
     `monster-campfire.analytics_468762418.events_*`
   WHERE
-    _TABLE_SUFFIX >= FORMAT_DATE('%Y%m%d', DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 90 DAY))
+    -- ชดเชยเวลา UTC gap (+1 วัน) เพื่อให้ครอบคลุมเวลา Asia/Bangkok แบบ 100%
+    _TABLE_SUFFIX >= FORMAT_DATE('%Y%m%d', DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 91 DAY))
     AND event_name IN ('session_start',
       'first_open',
       'user_engagement')
+    -- คัดกรองข้อมูลจากทีม QA หรือโหมด Debug ออก
     AND NOT EXISTS(
     SELECT
       1
@@ -63,17 +68,26 @@ WITH
       AND (value.string_value IS NOT NULL
         OR value.int_value = 1) ) )
 SELECT
-  user_pseudo_id,
-  DATE(TIMESTAMP_MICROS(event_timestamp), 'Asia/Bangkok') AS event_date,
-  event_name,
-  country,
-  os,
-  player_status,
-  ga_session_id,
-  CAST(engagement_time_msec / 1000 AS FLOAT64) AS engagement_time_sec,
-  first_touch_date
+  SAFE_CAST(user_pseudo_id AS STRING) AS user_pseudo_id,
+  SAFE_CAST(user_id AS STRING) AS user_id,
+  -- Identity Resolution: มัดรวม ID ที่แม่นยำที่สุดไว้ใช้งานต่อ
+  SAFE_CAST(COALESCE(NULLIF(user_id, ''), user_pseudo_id) AS STRING) AS resolved_user_id,
+  -- Timezone Transformation: แปลงทุกเวลาเป็น Asia/Bangkok
+  SAFE_CAST(EXTRACT(DATE
+    FROM
+      TIMESTAMP_MICROS(event_timestamp) AT TIME ZONE 'Asia/Bangkok') AS DATE) AS event_date,
+  SAFE_CAST(event_name AS STRING) AS event_name,
+  SAFE_CAST(country AS STRING) AS country,
+  SAFE_CAST(os AS STRING) AS os,
+  SAFE_CAST(player_status AS STRING) AS player_status,
+  SAFE_CAST(ga_session_id AS INT64) AS ga_session_id,
+  SAFE_CAST(engagement_time_msec / 1000 AS FLOAT64) AS engagement_time_sec,
+  SAFE_CAST(EXTRACT(DATE
+    FROM
+      TIMESTAMP_MICROS(NULLIF(user_first_touch_timestamp, 0)) AT TIME ZONE 'Asia/Bangkok') AS DATE) AS first_touch_date
 FROM
   raw_events
 WHERE
+  -- กรอง Event ขยะ (User Engagement ที่เวลาเป็น 0)
   NOT (event_name = 'user_engagement'
     AND engagement_time_msec = 0)

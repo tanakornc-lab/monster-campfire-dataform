@@ -5,32 +5,29 @@ config {
     description: "View สำหรับหาจุดยึด Cohort Date แรกสุด และล็อกสถานะล่าสุดของผู้เล่นรายบุคคล (Latest Snapshot)"
 }
 
-WITH ranked_user_status AS (
+WITH
+  ranked_user_status AS (
   SELECT
-    user_pseudo_id,
+    resolved_user_id,
     country,
     os,
     player_status,
     event_date,
     -- หาแถวล่าสุดของแต่ละ User เพื่อเอาคุณลักษณะปัจจุบันมาใช้ล็อกค่าสแน็ปช็อต
-    ROW_NUMBER() OVER (PARTITION BY user_pseudo_id ORDER BY event_date DESC) AS rn
+    ROW_NUMBER() OVER (PARTITION BY resolved_user_id ORDER BY event_date DESC) AS rn
   FROM
-    ${ref("core_events")}
-),
-
-cohort_first_dates AS (
+    ${ref("core_events")} ),
+  cohort_first_dates AS (
   SELECT
-    user_pseudo_id,
+    resolved_user_id,
     -- กฎ 1.1: ค้นหาจุดเริ่มต้นวันแรกจริงของผู้เล่นจาก event แรกสุดที่ปรากฏในระบบ
     MIN(event_date) AS cohort_date
   FROM
     ${ref("core_events")}
   GROUP BY
-    1
-)
-
+    1 )
 SELECT
-  r.user_pseudo_id,
+  r.resolved_user_id,
   SAFE_CAST(c.cohort_date AS DATE) AS cohort_date,
   r.country,
   r.os,
@@ -40,6 +37,6 @@ FROM
 INNER JOIN
   cohort_first_dates c
 ON
-  r.user_pseudo_id = c.user_pseudo_id
+  r.resolved_user_id = c.resolved_user_id
 WHERE
   r.rn = 1
