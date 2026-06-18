@@ -2,99 +2,132 @@ config {
     type: "table",
     schema: "analytics_transform",
     name: "core_kpis",
-    description: "Transform layer: Aggregated daily Core KPIs combined with 28-day Stickiness (MAU) using resolved_user_id."
+    description: "Transform layer: Aggregated daily Core KPIs with True Churn Rate and 28-day MAU."
 }
 
 WITH
-  -- 1. สรุปพฤติกรรมระดับ User รายวัน (เพื่อป้องกันการนับซ้ำ และให้ DAU แม่นยำที่สุด)
-  daily_user_stats AS (
-    SELECT
-      event_date AS date,
-      country,
-      os,
-      player_status,
-      resolved_user_id, -- ใช้ ID ที่ผ่านการแก้ไขปัญหา Cross-device มาแล้วจาก Layer 1
-      MAX(IF(event_name = 'first_open', 1, 0)) AS is_new_user,
-      COUNT(DISTINCT ga_session_id) AS sessions_count,
-      SUM(engagement_time_sec) AS eng_sec
-    FROM
-      ${ref("core_events")}
-    GROUP BY
-      1, 2, 3, 4, 5
-  ),
-
-  -- 2. สรุป Core KPIs ระดับวัน
-  daily_core_metrics AS (
-    SELECT
-      date,
-      country,
-      os,
-      player_status,
-      COUNT(DISTINCT resolved_user_id) AS dau,
-      SUM(is_new_user) AS new_users,
-      SUM(sessions_count) AS total_sessions,
-      SUM(eng_sec) AS total_eng_sec
-    FROM
-      daily_user_stats
-    GROUP BY
-      1, 2, 3, 4
-  ),
-
-  -- 3. คำนวณ Churn Rate ดึง DAU ของเมื่อวานมาประกบ (ปลอดภัย ไม่เกิด Correlated Subquery Error)
-  metrics_with_churn AS (
-    SELECT
-      *,
-      LAG(dau) OVER (PARTITION BY country, os, player_status ORDER BY date) AS prev_dau
-    FROM
-      daily_core_metrics
-  ),
-
-  -- 4. คำนวณ MAU แบบ Rolling 28 วัน (Best Practice สำหรับ BigQuery)
-  -- สร้างปฏิทินวันที่มี Activity แล้ว Join กลับไปหา User ที่เคยเล่นในช่วง 28 วันย้อนหลัง
+  -- 1. ข้อมูลการเล่นระดับ User รายวัน
+  daily_user_activity AS (
+  SELECT
+    event_date AS date,
+    country,
+    os,
+    player_status,
+    resolved_user_id,
+    MAX(
+    IF
+      (event_name = 'first_open', 1, 0)) AS is_new_user,
+    COUNT(DISTINCT ga_session_id) AS sessions_count,
+    SUM(engagement_time_sec) AS eng_sec
+  FROM
+    ${ref("core_events")}
+  GROUP BY
+    1,
+    2,
+    3,
+    4,
+    5 ),
+  -- 2. คำนวณ True Churn (คนที่เล่นเมื่อวาน แต่ไม่ได้เล่นวันนี้)
+  churn_logic AS (
+  SELECT
+    t1.date AS eval_date,
+    -- วันที่ตั้งต้น (เมื่อวาน)
+    t1.country,
+    t1.os,
+    t1.player_status,
+    COUNT(DISTINCT t1.resolved_user_id) AS yesterday_dau,
+    -- ถ้ายูสเซอร์ของเมื่อวาน (t1) ไม่มีข้อมูลในวันนี้ (t2) แปลว่า Churn
+    COUNT(DISTINCT
+      CASE
+        WHEN t2.resolved_user_id IS NULL THEN t1.resolved_user_id
+    END
+      ) AS churned_users
+  FROM
+    daily_user_activity t1
+  LEFT JOIN
+    daily_user_activity t2
+  ON
+    t1.resolved_user_id = t2.resolved_user_id
+    AND t2.date = DATE_ADD(t1.date, INTERVAL 1 DAY)
+    -- เช็คกับวันถัดไป
+  GROUP BY
+    1,
+    2,
+    3,
+    4 ),
+  -- 3. สรุป Metrics รายวันตั้งต้น (DAU, Sessions, New Users)
+  daily_metrics AS (
+  SELECT
+    date,
+    country,
+    os,
+    player_status,
+    COUNT(DISTINCT resolved_user_id) AS dau,
+    SUM(is_new_user) AS new_users,
+    SUM(sessions_count) AS total_sessions,
+    SUM(eng_sec) AS total_eng_sec
+  FROM
+    daily_user_activity
+  GROUP BY
+    1,
+    2,
+    3,
+    4 ),
+  -- 4. คำนวณ MAU 28 วันย้อนหลัง
   mau_rolling_metrics AS (
+  SELECT
+    d.date,
+    u.country,
+    u.os,
+    u.player_status,
+    COUNT(DISTINCT u.resolved_user_id) AS mau_28d
+  FROM (
     SELECT
-      d.date,
-      u.country,
-      u.os,
-      u.player_status,
-      COUNT(DISTINCT u.resolved_user_id) AS mau_28d
+      DISTINCT date
     FROM
-      (SELECT DISTINCT date FROM daily_core_metrics) d
-    INNER JOIN
-      daily_user_stats u
-    ON
-      -- ดึงข้อมูลย้อนหลัง 27 วัน + วันปัจจุบัน = 28 วันพอดี ตาม Spec R02
-      u.date BETWEEN DATE_SUB(d.date, INTERVAL 27 DAY) AND d.date
-    GROUP BY
-      1, 2, 3, 4
-  )
-
--- 5. รวมร่าง Core KPIs และ Stickiness เข้าด้วยกัน พร้อมใส่ SAFE_CAST คุม Type
+      daily_metrics) d
+  INNER JOIN
+    daily_user_activity u
+  ON
+    u.date BETWEEN DATE_SUB(d.date, INTERVAL 27 DAY)
+    AND d.date
+  GROUP BY
+    1,
+    2,
+    3,
+    4 )
+  -- 5. รวมร่างทั้งหมดเข้าด้วยกัน
 SELECT
-  SAFE_CAST(c.date AS DATE) AS date,
-  SAFE_CAST(c.country AS STRING) AS country,
-  SAFE_CAST(c.os AS STRING) AS os,
-  SAFE_CAST(c.player_status AS STRING) AS player_status,
-  SAFE_CAST(c.dau AS INT64) AS dau,
-  SAFE_CAST(m.mau_28d AS INT64) AS mau_28d,
-  
-  -- Stickiness: DAU / MAU (แสดงผลเป็นเปอร์เซ็นต์)
-  SAFE_CAST(SAFE_DIVIDE(c.dau, NULLIF(m.mau_28d, 0)) * 100 AS FLOAT64) AS stickiness_pct,
-  
-  SAFE_CAST(c.new_users AS INT64) AS new_users,
-  SAFE_CAST(c.total_sessions AS INT64) AS total_sessions,
-  SAFE_CAST(SAFE_DIVIDE(c.total_sessions, NULLIF(c.dau, 0)) AS FLOAT64) AS avg_sessions_per_user,
-  SAFE_CAST(SAFE_DIVIDE(c.total_eng_sec, NULLIF(c.dau, 0)) AS FLOAT64) AS avg_engagement_sec_per_user,
-  
-  -- Churn Rate: (DAU เมื่อวาน - DAU วันนี้) / DAU เมื่อวาน (ถ้าค่าติดลบ หมายถึงฐานผู้เล่นกำลังเติบโต)
-  SAFE_CAST(SAFE_DIVIDE(c.prev_dau - c.dau, NULLIF(c.prev_dau, 0)) AS FLOAT64) AS churn_rate
-
+  SAFE_CAST(m.date AS DATE) AS date,
+  SAFE_CAST(m.country AS STRING) AS country,
+  SAFE_CAST(m.os AS STRING) AS os,
+  SAFE_CAST(m.player_status AS STRING) AS player_status,
+  -- Metrics หลัก
+  SAFE_CAST(m.dau AS INT64) AS dau,
+  SAFE_CAST(mau.mau_28d AS INT64) AS mau_28d,
+  SAFE_CAST(m.new_users AS INT64) AS new_users,
+  SAFE_CAST(m.total_sessions AS INT64) AS total_sessions,
+  -- ค่าเฉลี่ยการเล่น
+  SAFE_CAST(SAFE_DIVIDE(m.total_sessions, NULLIF(m.dau, 0)) AS FLOAT64) AS avg_sessions_per_user,
+  SAFE_CAST(SAFE_DIVIDE(m.total_eng_sec, NULLIF(m.dau, 0)) AS FLOAT64) AS avg_engagement_sec_per_user,
+  -- สัดส่วนที่คำนวณไว้ให้ (แนะนำให้ใช้ Average ใน BI หรือใช้สูตรตั้งค่าใหม่ใน BI)
+  SAFE_CAST(SAFE_DIVIDE(m.dau, NULLIF(mau.mau_28d, 0)) AS FLOAT64) AS stickiness_rate,
+  -- True Churn Rate (คนที่หายไป / DAU ของเมื่อวาน)
+  SAFE_CAST(SAFE_DIVIDE(c.churned_users, NULLIF(c.yesterday_dau, 0)) AS FLOAT64) AS churn_rate
 FROM
-  metrics_with_churn c
+  daily_metrics m
 LEFT JOIN
-  mau_rolling_metrics m
+  mau_rolling_metrics mau
 ON
-  c.date = m.date
-  AND c.country = m.country
-  AND c.os = m.os
-  AND c.player_status = m.player_status
+  m.date = mau.date
+  AND m.country = mau.country
+  AND m.os = mau.os
+  AND m.player_status = mau.player_status
+LEFT JOIN
+  churn_logic c
+  -- นำผลประเมินเมื่อวาน มาแสดงผลในบรรทัดของ "วันนี้"
+ON
+  m.date = DATE_ADD(c.eval_date, INTERVAL 1 DAY)
+  AND m.country = c.country
+  AND m.os = c.os
+  AND m.player_status = c.player_status
