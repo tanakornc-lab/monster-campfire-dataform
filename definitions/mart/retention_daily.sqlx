@@ -98,7 +98,7 @@ SELECT
   IF(
     DATE_DIFF(CURRENT_DATE('Asia/Bangkok'), g.cohort_date, DAY) < g.day_n,
     NULL,
-    SAFE_CAST(SAFE_DIVIDE(COALESCE(r.retained_users, 0), NULLIF(g.cohort_size, 0)) * 100 AS FLOAT64)
+    SAFE_CAST(SAFE_DIVIDE(COALESCE(r.retained_users, 0), NULLIF(g.cohort_size, 0)) AS FLOAT64)
   ) AS retention_pct
 FROM
   matrix_grid g
