@@ -7,7 +7,19 @@ config {
         partitionBy: "date",
         clusterBy: ["country", "os", "player_status"]
     },
-    description: "Final Mart layer containing only the 7 new requested KPIs, optimized for BI reporting."
+    description: "Final Mart layer containing optimized KPIs for BI reporting, featuring DAU.",
+    columns: {
+        date: "วันที่เกิดกิจกรรม",
+        country: "ประเทศของผู้ใช้งาน",
+        os: "ระบบปฏิบัติการ (iOS หรือ Android)",
+        player_status: "สถานะผู้เล่น (vip หรือ normal)",
+        dau: "จำนวนผู้เล่นที่เข้ามาใช้งานจริงในวันนั้นแบบไม่ซ้ำกัน (Daily Active Users)",
+        new_users: "จำนวนผู้เล่นใหม่ที่เปิดเกมครั้งแรก",
+        total_sessions: "ยอดรวมจำนวนรอบการเข้าเล่นเกมทั้งหมด",
+        avg_sessions_per_user: "ค่าเฉลี่ยจำนวนรอบการเข้าเกมต่อผู้ใช้",
+        avg_engagement_sec_per_user: "ค่าเฉลี่ยเวลาที่ใช้เล่นเกมจริงต่อผู้ใช้ (วินาที)",
+        updated_at: "เวลาที่ข้อมูลถูกอัปเดตล่าสุด"
+    }
 }
 
 SELECT
@@ -15,8 +27,7 @@ SELECT
   country,
   os,
   player_status,
-  total_users,
-  active_users,
+  dau,
   new_users,
   total_sessions,
   avg_sessions_per_user,

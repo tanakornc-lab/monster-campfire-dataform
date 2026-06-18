@@ -2,7 +2,7 @@ config {
     type: "table",
     schema: "analytics_transform",
     name: "core_kpis",
-    description: "Aggregated daily KPIs: Total users, DAU, Sessions, and Engagement metrics."
+    description: "Aggregated daily KPIs: DAU, Sessions, and Engagement metrics."
 }
 
 WITH
@@ -56,24 +56,11 @@ SELECT
   country,
   os,
   player_status,
-  CAST(COUNT(DISTINCT user_pseudo_id) AS INT64) AS total_users,
-  CAST(COUNT(DISTINCT
-      CASE
-        WHEN daily_session_count > 0 THEN user_pseudo_id
-    END
-      ) AS INT64) AS active_users,
+  CAST(COUNT(DISTINCT user_pseudo_id) AS INT64) AS dau,
   CAST(SUM(is_new_game_user) AS INT64) AS new_users,
   CAST(SUM(daily_session_count) AS INT64) AS total_sessions,
-  SAFE_DIVIDE(SUM(daily_session_count), NULLIF(COUNT(DISTINCT
-        CASE
-          WHEN daily_session_count > 0 THEN user_pseudo_id
-      END
-        ), 0)) AS avg_sessions_per_user,
-  SAFE_DIVIDE(SUM(daily_total_eng_sec), NULLIF(COUNT(DISTINCT
-        CASE
-          WHEN daily_session_count > 0 THEN user_pseudo_id
-      END
-        ), 0)) AS avg_engagement_sec_per_user
+  SAFE_DIVIDE(SUM(daily_session_count), NULLIF(COUNT(DISTINCT user_pseudo_id), 0)) AS avg_sessions_per_user,
+  SAFE_DIVIDE(SUM(daily_total_eng_sec), NULLIF(COUNT(DISTINCT user_pseudo_id), 0)) AS avg_engagement_sec_per_user
 FROM
   user_daily_summary
 GROUP BY
