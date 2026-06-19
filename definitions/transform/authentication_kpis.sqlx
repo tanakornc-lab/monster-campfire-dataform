@@ -1,9 +1,9 @@
 config {
-  type: "view",
-  name: "authentication_kpis",
-  schema: "analytics_transform",
-  description: "Aggregated daily authentication KPIs",
-  tags: ["auth", "transform"]
+    type: "view",
+    name: "authentication_kpis",
+    schema: "analytics_transform",
+    description: "Aggregated daily authentication KPIs (includes Guest to Social Conversion)",
+    tags: ["auth", "transform"]
 }
 
 WITH
@@ -27,25 +27,47 @@ WITH
     2,
     3,
     4,
-    5 )
+    5 ),
+  -- CTE หาประวัติคนที่เคยเข้าด้วย Guest พร้อมบันทึกวันแรกที่เป็น Guest
+  guest_history AS (
+  SELECT
+    user_pseudo_id,
+    MIN(event_date) AS first_guest_date
+  FROM
+    ${ref("authentication_events")}
+  WHERE
+    method = 'guest'
+  GROUP BY
+    1 )
 SELECT
-  event_date AS date,
-  country,
-  platform,
-  method,
-  COUNT(DISTINCT user_pseudo_id) AS total_auth_users,
-  SUM(is_signup) AS signup_users,
-  SUM(is_login) AS login_users,
+  d.event_date AS date,
+  d.country,
+  d.platform,
+  d.method,
+  COUNT(DISTINCT d.user_pseudo_id) AS total_auth_users,
+  SUM(d.is_signup) AS signup_users,
+  SUM(d.is_login) AS login_users,
   COUNT(DISTINCT
   IF
-    (is_signup = 1
-      AND method = 'guest', user_pseudo_id, NULL)) AS guest_signup_users,
+    (d.is_signup = 1
+      AND d.method = 'guest', d.user_pseudo_id, NULL)) AS guest_signup_users,
   COUNT(DISTINCT
   IF
-    (is_login = 1
-      AND method = 'guest', user_pseudo_id, NULL)) AS guest_login_users
+    (d.is_login = 1
+      AND d.method = 'guest', d.user_pseudo_id, NULL)) AS guest_login_users,
+  -- KPI ใหม่: นับ User ที่เคยเป็น Guest แล้วมากด Sign up ด้วย Social/วิธีอื่น
+  COUNT(DISTINCT
+  IF
+    (d.is_signup = 1
+      AND d.method != 'guest'
+      AND g.user_pseudo_id IS NOT NULL
+      AND d.event_date >= g.first_guest_date, d.user_pseudo_id, NULL)) AS guest_to_social_users
 FROM
-  daily_auth_stats
+  daily_auth_stats d
+LEFT JOIN
+  guest_history g
+ON
+  d.user_pseudo_id = g.user_pseudo_id
 GROUP BY
   1,
   2,
