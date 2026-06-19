@@ -1,0 +1,18 @@
+config {
+    type: "incremental",
+    name: "tutorial_daily",
+    schema: "analytics_mart",
+    uniqueKey: ["date", "country", "platform", "tutorial_name"],
+    partitionBy: "date",
+    clusterBy: ["country", "platform", "tutorial_name"],
+    description: "Mart table for tutorial performance (Incremental Update)",
+    tags: ["tutorial", "mart", "daily"]
+}
+
+SELECT
+  *,
+  CURRENT_TIMESTAMP() AS updated_at
+FROM
+  ${ref("tutorial_kpis")}
+  -- ถ้ารันแบบ Incremental ให้ประมวลผลแค่ 3 วันล่าสุด
+  ${when(incremental(), `WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 3 DAY)`)}

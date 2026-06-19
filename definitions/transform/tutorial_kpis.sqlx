@@ -1,0 +1,35 @@
+config {
+    type: "view",
+    name: "tutorial_kpis",
+    schema: "analytics_transform",
+    description: "Aggregated daily tutorial KPIs using HLL Sketches",
+    tags: ["tutorial", "transform"]
+}
+
+SELECT
+  event_date AS date,
+  country,
+  platform,
+  tutorial_name,
+  HLL_COUNT.INIT(
+  IF
+    (event_name = 'tutorial_begin', user_pseudo_id, NULL)) AS begin_users_sketch,
+  HLL_COUNT.INIT(
+  IF
+    (event_name = 'tutorial_complete', user_pseudo_id, NULL)) AS complete_users_sketch,
+  SUM(
+  IF
+    (event_name = 'tutorial_begin', is_daily_first_event, 0)) AS daily_begin_count,
+  SUM(
+  IF
+    (event_name = 'tutorial_complete', is_daily_first_event, 0)) AS daily_complete_count,
+  SAFE_DIVIDE( SUM(
+    IF
+      (event_name = 'tutorial_complete', duration_ms, 0)) / 1000, COUNTIF(event_name = 'tutorial_complete') ) AS avg_completion_time_sec
+FROM
+  ${ref("tutorial_events")}
+GROUP BY
+  1,
+  2,
+  3,
+  4

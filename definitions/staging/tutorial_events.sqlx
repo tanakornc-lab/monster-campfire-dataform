@@ -1,0 +1,59 @@
+config {
+    type: "view",
+    name: "tutorial_events",
+    schema: "analytics_staging",
+    description: "Staging view for tutorial events (tutorial_begin, tutorial_complete)",
+    tags: ["tutorial", "staging"]
+}
+
+WITH
+  raw_data AS (
+  SELECT
+    user_pseudo_id,
+    EXTRACT(DATE
+    FROM
+      TIMESTAMP_MICROS(event_timestamp) AT TIME ZONE 'Asia/Bangkok') AS event_date,
+    event_timestamp,
+    event_name,
+    geo.country AS country,
+    device.operating_system AS platform,
+    (
+    SELECT
+      value.string_value
+    FROM
+      UNNEST(event_params)
+    WHERE
+      KEY = 'tutorial_name') AS tutorial_name,
+    CAST((
+      SELECT
+        value.int_value
+      FROM
+        UNNEST(event_params)
+      WHERE
+        KEY = 'duration_ms') AS INT64) AS duration_ms,
+    (
+    SELECT
+      value.string_value
+    FROM
+      UNNEST(event_params)
+    WHERE
+      KEY = 'reason') AS reason
+  FROM
+    `monster-campfire.analytics_468762418.events_*`
+  WHERE
+    _TABLE_SUFFIX >= FORMAT_DATE('%Y%m%d', DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 90 DAY))
+    AND event_name IN ('tutorial_begin',
+      'tutorial_complete')
+    AND (
+    SELECT
+      value.int_value
+    FROM
+      UNNEST(event_params)
+    WHERE
+      KEY = 'debug_mode') IS NULL )
+SELECT
+  *,
+IF
+  ( ROW_NUMBER() OVER (PARTITION BY user_pseudo_id, event_date, event_name, tutorial_name, country, platform ORDER BY event_timestamp ) = 1, 1, 0 ) AS is_daily_first_event
+FROM
+  raw_data
