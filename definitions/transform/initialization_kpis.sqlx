@@ -169,7 +169,7 @@ SELECT
   CAST(AVG(NULLIF(t_11 - t_10, 0)) AS FLOAT64) AS avg_sec_to_load_data,
   CAST(AVG(NULLIF(t_12 - t_11, 0)) AS FLOAT64) AS avg_sec_to_entry,
   -- [KPI 4] เวลาทั้งหมดรวมตั้งแต่ต้นจนเข้าเกมได้สำเร็จ ปลอดภัยจากปัญหา NULL บน PROD
-  CAST(AVG(NULLIF(t_12 - t_01, 0)) AS FLOAT64) AS avg_total_sec_to_entry
+  CAST(AVG(NULLIF(t_11 - t_01, 0)) AS FLOAT64) AS avg_total_sec_to_entry
 FROM
   funnel_stages
 GROUP BY
