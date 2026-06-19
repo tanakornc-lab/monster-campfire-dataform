@@ -1,0 +1,18 @@
+config {
+    type: "incremental",
+    name: "authentication_daily",
+    schema: "analytics_mart",
+    uniqueKey: ["date", "country", "platform", "method"],
+    partitionBy: "date",
+    clusterBy: ["country", "method"],
+    description: "Mart table for authentication KPIs",
+    tags: ["auth", "mart", "daily"]
+}
+
+SELECT
+  *,
+  CURRENT_TIMESTAMP() AS updated_at
+FROM
+  ${ref("authentication_kpis")}
+  -- ดึงมาอัปเดตเฉพาะ 3 วันล่าสุดถ้ารันแบบปกติ (Incremental)
+  ${when(incremental(), `WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 3 DAY)`)}

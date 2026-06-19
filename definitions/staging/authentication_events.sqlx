@@ -1,0 +1,54 @@
+config {
+    type: "view",
+    name: "authentication_events",
+    schema: "analytics_staging",
+    description: "Staging view for authentication events (sign_up, login)",
+    tags: ["auth", "staging"]
+}
+
+WITH
+  raw_events AS (
+  SELECT
+    user_pseudo_id,
+    event_timestamp,
+    event_name,
+    geo.country AS country,
+    device.operating_system AS platform,
+    (
+    SELECT
+      value.string_value
+    FROM
+      UNNEST(event_params)
+    WHERE
+      KEY = 'method') AS method,
+    DATE(TIMESTAMP_MICROS(NULLIF(user_first_touch_timestamp, 0)), 'Asia/Bangkok') AS first_touch_date,
+    (
+    SELECT
+      1
+    FROM
+      UNNEST(event_params)
+    WHERE
+      KEY = 'debug_mode'
+      AND (value.string_value IS NOT NULL
+        OR value.int_value = 1) ) AS is_debug
+  FROM
+    `monster-campfire.analytics_468762418.events_*`
+  WHERE
+    event_name IN ('sign_up',
+      'login')
+    -- ดึงข้อมูลย้อนหลังเผื่อไว้ 90 วัน (การกรองวันที่แคบลงจะไปทำในชั้น Incremental)
+    AND _TABLE_SUFFIX >= FORMAT_DATE('%Y%m%d', DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 90 DAY)) )
+SELECT
+  user_pseudo_id,
+  EXTRACT(DATE
+  FROM
+    TIMESTAMP_MICROS(event_timestamp) AT TIME ZONE 'Asia/Bangkok') AS event_date,
+  event_name,
+  country,
+  platform,
+  COALESCE(method, 'unknown') AS method,
+  first_touch_date
+FROM
+  raw_events
+WHERE
+  is_debug IS NULL

@@ -1,0 +1,53 @@
+config {
+  type: "view",
+  name: "authentication_kpis",
+  schema: "analytics_transform",
+  description: "Aggregated daily authentication KPIs",
+  tags: ["auth", "transform"]
+}
+
+WITH
+  daily_auth_stats AS (
+  SELECT
+    event_date,
+    country,
+    platform,
+    user_pseudo_id,
+    method,
+    MAX(
+    IF
+      (event_name = 'sign_up', 1, 0)) AS is_signup,
+    MAX(
+    IF
+      (event_name = 'login', 1, 0)) AS is_login
+  FROM
+    ${ref("authentication_events")}
+  GROUP BY
+    1,
+    2,
+    3,
+    4,
+    5 )
+SELECT
+  event_date AS date,
+  country,
+  platform,
+  method,
+  COUNT(DISTINCT user_pseudo_id) AS total_auth_users,
+  SUM(is_signup) AS signup_users,
+  SUM(is_login) AS login_users,
+  COUNT(DISTINCT
+  IF
+    (is_signup = 1
+      AND method = 'guest', user_pseudo_id, NULL)) AS guest_signup_users,
+  COUNT(DISTINCT
+  IF
+    (is_login = 1
+      AND method = 'guest', user_pseudo_id, NULL)) AS guest_login_users
+FROM
+  daily_auth_stats
+GROUP BY
+  1,
+  2,
+  3,
+  4
