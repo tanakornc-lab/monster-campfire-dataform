@@ -1,0 +1,27 @@
+config {
+    type: "view",
+    name: "mission_kpis",
+    schema: "analytics_transform",
+    description: "Aggregated daily mission attempts and success rate per user",
+    tags: ["mission", "transform"]
+}
+
+SELECT
+  event_date AS date,
+  user_pseudo_id,
+  country,
+  platform,
+  level_name,
+  mission_type,
+  CAST(COUNT(*) AS INT64) AS attempts,
+  CAST(SUM(is_success) AS INT64) AS success,
+  CAST(COUNT(*) - SUM(is_success) AS INT64) AS fails
+FROM
+  ${ref("mission_events")}
+GROUP BY
+  1,
+  2,
+  3,
+  4,
+  5,
+  6

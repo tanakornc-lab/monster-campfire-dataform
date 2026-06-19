@@ -1,0 +1,18 @@
+config {
+    type: "incremental",
+    name: "mission_daily",
+    schema: "analytics_mart",
+    uniqueKey: ["date", "user_pseudo_id", "country", "platform", "level_name", "mission_type"],
+    partitionBy: "date",
+    clusterBy: ["level_name", "user_pseudo_id"],
+    description: "Mart table for daily mission and sub-mission performance",
+    tags: ["mission", "mart", "daily"]
+}
+
+SELECT
+  *,
+  CURRENT_TIMESTAMP() AS updated_at
+FROM
+  ${ref("mission_kpis")}
+  -- ถ้ารันแบบ Incremental ให้ประมวลผลแค่ 3 วันล่าสุด
+  ${when(incremental(), `WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 3 DAY)`)}

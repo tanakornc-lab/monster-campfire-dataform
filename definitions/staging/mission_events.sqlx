@@ -1,0 +1,56 @@
+config {
+    type: "view",
+    name: "mission_events",
+    schema: "analytics_staging",
+    description: "Staging view for mission and sub-mission events (level_end)",
+    tags: ["mission", "staging"]
+}
+
+SELECT
+  user_pseudo_id,
+  EXTRACT(DATE
+  FROM
+    TIMESTAMP_MICROS(event_timestamp) AT TIME ZONE 'Asia/Bangkok') AS event_date,
+  geo.country AS country,
+  device.operating_system AS platform,
+  (
+  SELECT
+    value.string_value
+  FROM
+    UNNEST(event_params)
+  WHERE
+    KEY = 'level_name') AS level_name,
+  (
+  SELECT
+    value.string_value
+  FROM
+    UNNEST(event_params)
+  WHERE
+    KEY = 'mission_type') AS mission_type,
+IF
+  ( COALESCE( (
+      SELECT
+        value.string_value
+      FROM
+        UNNEST(event_params)
+      WHERE
+        KEY = 'success'), CAST((
+        SELECT
+          value.int_value
+        FROM
+          UNNEST(event_params)
+        WHERE
+          KEY = 'success') AS STRING) ) IN ('true',
+      '1'), 1, 0 ) AS is_success
+FROM
+  `monster-campfire.analytics_468762418.events_*`
+WHERE
+  _TABLE_SUFFIX >= FORMAT_DATE('%Y%m%d', DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 90 DAY))
+  AND event_name = 'level_end'
+  AND (
+  SELECT
+    value.int_value
+  FROM
+    UNNEST(event_params)
+  WHERE
+    KEY = 'debug_mode') IS NULL
