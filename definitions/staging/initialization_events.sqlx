@@ -1,0 +1,54 @@
+config {
+    type: "view",
+    schema: "analytics_staging",
+    name: "initialization_events",
+    description: "Staging layer: สกัดพารามิเตอร์และจัดรูปแบบข้อมูลจาก Event การโหลดเกม (initial_event)"
+}
+
+SELECT
+  user_pseudo_id,
+  -- [PO] ดึง session_id จาก event_params
+  CAST((
+    SELECT
+      value.int_value
+    FROM
+      UNNEST(event_params)
+    WHERE
+      KEY = 'ga_session_id') AS INT64) AS session_id,
+  -- [System] จัดการ Timezone & Partitioning
+  DATE(TIMESTAMP_MICROS(event_timestamp), 'Asia/Bangkok') AS event_date,
+  event_timestamp,
+  -- [Marketing] Standard Dimensions บังคับ
+  COALESCE(geo.country, '(not set)') AS country,
+  COALESCE(device.operating_system, '(not set)') AS os,
+  -- [PO] งัด parameter 'name' ออกมาเป็น stage_name
+  CAST((
+    SELECT
+      value.string_value
+    FROM
+      UNNEST(event_params)
+    WHERE
+      KEY = 'name') AS STRING) AS stage_name,
+  -- [PO] งัด 'time_since_startup' เพื่อใช้คำนวณ Average Time (Seconds)
+  CAST((
+    SELECT
+      COALESCE(value.double_value, value.float_value)
+    FROM
+      UNNEST(event_params)
+    WHERE
+      KEY = 'time_since_startup') AS FLOAT64) AS time_since_startup
+FROM
+  `monster-campfire.analytics_468762418.events_*`
+WHERE
+  _TABLE_SUFFIX >= FORMAT_DATE('%Y%m%d', DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 90 DAY))
+  AND event_name = 'initial_event'
+  -- [System] กรองข้อมูล Debug
+  AND (
+  SELECT
+    value.int_value
+  FROM
+    UNNEST(event_params)
+  WHERE
+    KEY = 'debug_mode') IS DISTINCT
+FROM
+  1

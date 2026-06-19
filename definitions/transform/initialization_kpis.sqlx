@@ -1,0 +1,178 @@
+config {
+    type: "view",
+    schema: "analytics_transform",
+    name: "initialization_kpis",
+    description: "Transform layer: คำนวณ Funnel Drop-off และระยะเวลาเฉลี่ยในการโหลดเข้าเกมแต่ละขั้น"
+}
+
+WITH
+  user_anchor_time AS (
+    -- ขั้นที่ 1: หาเวลาเปิดแอปครั้งแรกสุดของ User ในแต่ละวัน เพื่อใช้เป็นจุดยึดโยง (Anchor)
+  SELECT
+    user_pseudo_id,
+    event_date AS anchor_date,
+    country,
+    os,
+    -- ดึงเวลาเปิดแอปสเต็ปแรกสุดออกมา
+    MIN(CASE
+        WHEN stage_name = 'appsflyer-initialized' THEN time_since_startup
+    END
+      ) AS base_startup_time
+  FROM
+    ${ref("initialization_events")}
+  GROUP BY
+    1,
+    2,
+    3,
+    4 ),
+  funnel_stages AS (
+    -- ขั้นที่ 2: ดึงสเต็ปทั้งหมดออกมา โดยจับคู่กลับไปหาตัว Anchor เพื่อไม่ให้หลุดข้ามวัน
+  SELECT
+    STG.user_pseudo_id,
+    ANC.anchor_date AS date,
+    ANC.country,
+    ANC.os,
+    ANC.base_startup_time,
+    -- ใช้ MAX/MIN เพื่อกรองเอาเวลาของแต่ละ Stage ที่เกิดขึ้นหลังจากเปิดแอปครั้งนั้น
+    MIN(CASE
+        WHEN STG.stage_name = 'appsflyer-initialized' THEN STG.time_since_startup
+    END
+      ) AS t_01,
+    MIN(CASE
+        WHEN STG.stage_name = 'addressable-initialized' THEN STG.time_since_startup
+    END
+      ) AS t_02,
+    MIN(CASE
+        WHEN STG.stage_name = 'bundle-loaded' THEN STG.time_since_startup
+    END
+      ) AS t_03,
+    MIN(CASE
+        WHEN STG.stage_name = 'patch-applied' THEN STG.time_since_startup
+    END
+      ) AS t_04,
+    MIN(CASE
+        WHEN STG.stage_name = 'dynamic-initializer-start' THEN STG.time_since_startup
+    END
+      ) AS t_05,
+    MIN(CASE
+        WHEN STG.stage_name = 'global-service-start' THEN STG.time_since_startup
+    END
+      ) AS t_06,
+    MIN(CASE
+        WHEN STG.stage_name = 'global-service-finish' THEN STG.time_since_startup
+    END
+      ) AS t_07,
+    MIN(CASE
+        WHEN STG.stage_name = 'login-scene' THEN STG.time_since_startup
+    END
+      ) AS t_08,
+    MIN(CASE
+        WHEN STG.stage_name IN ('sign-in-seamless', 'sign-in-google-click', 'sign-in-apple-click', 'sign-in-guest-click') THEN STG.time_since_startup
+    END
+      ) AS t_09,
+    MIN(CASE
+        WHEN STG.stage_name = 'initial-api-started' THEN STG.time_since_startup
+    END
+      ) AS t_10,
+    MIN(CASE
+        WHEN STG.stage_name = 'load-game-data' THEN STG.time_since_startup
+    END
+      ) AS t_11,
+    MIN(CASE
+        WHEN STG.stage_name = 'entering-game-scene' THEN STG.time_since_startup
+    END
+      ) AS t_12
+  FROM
+    ${ref("initialization_events")} STG
+  INNER JOIN
+    user_anchor_time ANC
+  ON
+    STG.user_pseudo_id = ANC.user_pseudo_id
+    -- ยอมให้ข้อมูลเสร็จสิ้นข้ามไปอีกวันได้ (+1 วันจากวันเริ่มเปิดแอป) ป้องกันคอขวดเน็ตช้าข้ามเที่ยงคืน
+    AND STG.event_date BETWEEN ANC.anchor_date
+    AND DATE_ADD(ANC.anchor_date, INTERVAL 1 DAY)
+  GROUP BY
+    1,
+    2,
+    3,
+    4,
+    5 )
+SELECT
+  date,
+  country,
+  os,
+  -- [KPI 1 & 2] นับจำนวนแบบเหนียวแน่นตามหลัก Cohort
+  CAST(COUNT(DISTINCT
+      CASE
+        WHEN t_01 IS NOT NULL THEN user_pseudo_id
+    END
+      ) AS INT64) AS users_step_01_appsflyer,
+  CAST(COUNT(DISTINCT
+      CASE
+        WHEN t_02 IS NOT NULL THEN user_pseudo_id
+    END
+      ) AS INT64) AS users_step_02_addressable,
+  CAST(COUNT(DISTINCT
+      CASE
+        WHEN t_03 IS NOT NULL THEN user_pseudo_id
+    END
+      ) AS INT64) AS users_step_03_bundle,
+  CAST(COUNT(DISTINCT
+      CASE
+        WHEN t_04 IS NOT NULL THEN user_pseudo_id
+    END
+      ) AS INT64) AS users_step_04_patch,
+  CAST(COUNT(DISTINCT
+      CASE
+        WHEN t_05 IS NOT NULL THEN user_pseudo_id
+    END
+      ) AS INT64) AS users_step_05_dynamic,
+  CAST(COUNT(DISTINCT
+      CASE
+        WHEN t_06 IS NOT NULL THEN user_pseudo_id
+    END
+      ) AS INT64) AS users_step_06_service_start,
+  CAST(COUNT(DISTINCT
+      CASE
+        WHEN t_07 IS NOT NULL THEN user_pseudo_id
+    END
+      ) AS INT64) AS users_step_07_service_finish,
+  CAST(COUNT(DISTINCT
+      CASE
+        WHEN t_08 IS NOT NULL THEN user_pseudo_id
+    END
+      ) AS INT64) AS users_step_08_login,
+  CAST(COUNT(DISTINCT
+      CASE
+        WHEN t_09 IS NOT NULL THEN user_pseudo_id
+    END
+      ) AS INT64) AS users_step_09_signin,
+  CAST(COUNT(DISTINCT
+      CASE
+        WHEN t_10 IS NOT NULL THEN user_pseudo_id
+    END
+      ) AS INT64) AS users_step_10_api,
+  CAST(COUNT(DISTINCT
+      CASE
+        WHEN t_11 IS NOT NULL THEN user_pseudo_id
+    END
+      ) AS INT64) AS users_step_11_load_data,
+  CAST(COUNT(DISTINCT
+      CASE
+        WHEN t_12 IS NOT NULL THEN user_pseudo_id
+    END
+      ) AS INT64) AS users_step_12_entry,
+  -- [KPI 3] คำนวณเวลาเฉลี่ยแบบปลอดภัย
+  CAST(AVG(NULLIF(t_02 - t_01, 0)) AS FLOAT64) AS avg_sec_to_addressable,
+  CAST(AVG(NULLIF(t_03 - t_02, 0)) AS FLOAT64) AS avg_sec_to_bundle,
+  CAST(AVG(NULLIF(t_04 - t_03, 0)) AS FLOAT64) AS avg_sec_to_patch,
+  CAST(AVG(NULLIF(t_11 - t_10, 0)) AS FLOAT64) AS avg_sec_to_load_data,
+  CAST(AVG(NULLIF(t_12 - t_11, 0)) AS FLOAT64) AS avg_sec_to_entry,
+  -- [KPI 4] เวลาทั้งหมดรวมตั้งแต่ต้นจนเข้าเกมได้สำเร็จ ปลอดภัยจากปัญหา NULL บน PROD
+  CAST(AVG(NULLIF(t_12 - t_01, 0)) AS FLOAT64) AS avg_total_sec_to_entry
+FROM
+  funnel_stages
+GROUP BY
+  1,
+  2,
+  3
