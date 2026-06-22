@@ -1,0 +1,42 @@
+config {
+    type: "view",
+    name: "invite_kpis",
+    schema: "analytics_transform",
+    description: "Aggregated daily invite friend KPIs (shares and successful joins)",
+    tags: ["invite", "transform"]
+}
+
+WITH
+  invite_base AS (
+  SELECT
+    event_date AS date,
+    /* เปลี่ยนชื่อเป็น date ให้พร้อมใช้ใน Mart */
+    COUNTIF(event_name = 'share') AS total_invites,
+    HLL_COUNT.INIT(
+    IF
+      (event_name = 'share', user_pseudo_id, NULL)) AS unique_inviters_sketch,
+    COUNTIF(event_name = 'join_group'
+      AND result_status = 'success') AS total_invite_success,
+    HLL_COUNT.INIT(
+    IF
+      (event_name = 'join_group'
+        AND result_status = 'success', user_pseudo_id, NULL)) AS unique_success_users_sketch,
+    COUNT(DISTINCT user_pseudo_id) AS total_active_users_day,
+    COUNT(DISTINCT
+    IF
+      (event_date = first_touch_date, user_pseudo_id, NULL)) AS total_new_users_day
+  FROM
+    ${ref("invite_events")}
+  GROUP BY
+    1 )
+SELECT
+  date,
+  total_invites,
+  unique_inviters_sketch,
+  total_invite_success,
+  unique_success_users_sketch,
+  total_active_users_day,
+  total_new_users_day,
+  SAFE_DIVIDE(total_invites, HLL_COUNT.EXTRACT(unique_inviters_sketch)) AS avg_invites_per_person
+FROM
+  invite_base

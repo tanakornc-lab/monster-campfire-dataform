@@ -1,0 +1,64 @@
+config {
+    type: "view",
+    name: "invite_events",
+    schema: "analytics_staging",
+    description: "Staging view for invite friend events (share, join_group)",
+    tags: ["invite", "staging"]
+}
+
+SELECT
+  user_pseudo_id,
+  EXTRACT(DATE
+  FROM
+    TIMESTAMP_MICROS(event_timestamp) AT TIME ZONE 'Asia/Bangkok') AS event_date,
+  event_timestamp,
+  event_name,
+  (
+  SELECT
+    value.string_value
+  FROM
+    UNNEST(event_params)
+  WHERE
+    KEY = 'content_type') AS content_type,
+  (
+  SELECT
+    value.string_value
+  FROM
+    UNNEST(event_params)
+  WHERE
+    KEY = 'method') AS method,
+  (
+  SELECT
+    value.string_value
+  FROM
+    UNNEST(event_params)
+  WHERE
+    KEY = 'group_id') AS group_id,
+  COALESCE( (
+    SELECT
+      value.string_value
+    FROM
+      UNNEST(event_params)
+    WHERE
+      KEY = 'result'), 'unknown' ) AS result_status,
+  DATE(TIMESTAMP_MICROS(NULLIF(user_first_touch_timestamp, 0)), 'Asia/Bangkok') AS first_touch_date
+FROM
+  `monster-campfire.analytics_468762418.events_*`
+WHERE
+  _TABLE_SUFFIX >= FORMAT_DATE('%Y%m%d', DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 90 DAY))
+  AND ( (event_name = 'share'
+      AND (
+      SELECT
+        value.string_value
+      FROM
+        UNNEST(event_params)
+      WHERE
+        KEY = 'content_type') = 'referral_code')
+    OR (event_name = 'join_group') )
+  AND (
+  SELECT
+    value.int_value
+  FROM
+    UNNEST(event_params)
+  WHERE
+    KEY = 'debug_mode') IS NULL

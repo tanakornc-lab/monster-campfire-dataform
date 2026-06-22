@@ -1,0 +1,17 @@
+config {
+    type: "incremental",
+    name: "invite_daily",
+    schema: "analytics_mart",
+    uniqueKey: ["date"],
+    partitionBy: "date",
+    description: "Mart table for daily invite friend performance",
+    tags: ["invite", "mart", "daily"]
+}
+
+SELECT
+  *,
+  CURRENT_TIMESTAMP() AS updated_at
+FROM
+  ${ref("invite_kpis")}
+  -- ถ้ารันแบบ Incremental ให้ประมวลผลย้อนหลัง 3 วัน
+  ${when(incremental(), `WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 3 DAY)`)}
