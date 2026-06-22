@@ -1,0 +1,31 @@
+config {
+    type: "view",
+    name: "shop_kpis",
+    schema: "analytics_transform",
+    description: "Aggregated daily shop KPIs (views and virtual currency spends)",
+    tags: ["shop", "virtual_currency", "transform"]
+}
+
+SELECT
+  event_date AS date,
+  item_id,
+  item_category,
+  currency_name,
+  CAST(COUNTIF(event_name = 'view_item') AS INT64) AS total_views,
+  HLL_COUNT.INIT(
+  IF
+    (event_name = 'view_item', user_pseudo_id, NULL)) AS viewers_sketch,
+  CAST(COUNTIF(event_name = 'spend_virtual_currency') AS INT64) AS total_spends,
+  HLL_COUNT.INIT(
+  IF
+    (event_name = 'spend_virtual_currency', user_pseudo_id, NULL)) AS spenders_sketch,
+  CAST(SUM(
+    IF
+      (event_name = 'spend_virtual_currency', currency_value, 0)) AS INT64) AS total_currency_value
+FROM
+  ${ref("shop_events")}
+GROUP BY
+  1,
+  2,
+  3,
+  4

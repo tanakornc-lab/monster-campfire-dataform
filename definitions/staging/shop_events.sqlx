@@ -1,0 +1,73 @@
+config {
+    type: "view",
+    name: "shop_events",
+    schema: "analytics_staging",
+    description: "Staging view for in-game shop events (view_item, spend_virtual_currency)",
+    tags: ["shop", "virtual_currency", "staging"]
+}
+
+SELECT
+  user_pseudo_id,
+  EXTRACT(DATE
+  FROM
+    TIMESTAMP_MICROS(event_timestamp) AT TIME ZONE 'Asia/Bangkok') AS event_date,
+  event_timestamp,
+  event_name,
+  (
+  SELECT
+    value.string_value
+  FROM
+    UNNEST(event_params)
+  WHERE
+    KEY = 'item_id') AS item_id,
+  (
+  SELECT
+    value.string_value
+  FROM
+    UNNEST(event_params)
+  WHERE
+    KEY = 'item_category') AS item_category,
+  -- 🌟 ปรับเพิ่ม COALESCE ตรงนี้ เพื่อให้ Dataform นำไปทำ uniqueKey ได้โดยไม่ติดปัญหาค่า NULL
+  COALESCE( (
+    SELECT
+      value.string_value
+    FROM
+      UNNEST(event_params)
+    WHERE
+      KEY = 'virtual_currency_name'), 'unknown' ) AS currency_name,
+  CAST((
+    SELECT
+      value.int_value
+    FROM
+      UNNEST(event_params)
+    WHERE
+      KEY = 'value') AS INT64) AS currency_value,
+  geo.country,
+  device.operating_system AS platform
+FROM
+  `monster-campfire.analytics_468762418.events_*`
+WHERE
+  _TABLE_SUFFIX >= FORMAT_DATE('%Y%m%d', DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 90 DAY))
+  AND ( ( event_name = 'view_item'
+      AND (
+      SELECT
+        value.string_value
+      FROM
+        UNNEST(event_params)
+      WHERE
+        KEY = 'item_category') IS NOT NULL
+      AND (
+      SELECT
+        value.string_value
+      FROM
+        UNNEST(event_params)
+      WHERE
+        KEY = 'item_id') IS NOT NULL )
+    OR (event_name = 'spend_virtual_currency') )
+  AND (
+  SELECT
+    value.int_value
+  FROM
+    UNNEST(event_params)
+  WHERE
+    KEY = 'debug_mode') IS NULL

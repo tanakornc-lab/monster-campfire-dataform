@@ -1,0 +1,19 @@
+config {
+    type: "incremental",
+    name: "shop_daily",
+    schema: "analytics_mart",
+    uniqueKey: ["date", "item_id", "currency_name"],
+    /* จับคู่ 3 คอลัมน์นี้เหมือนโค้ด MERGE เดิม */
+    partitionBy: "date",
+    clusterBy: ["item_category", "item_id"],
+    description: "Mart table for daily shop performance (virtual currency)",
+    tags: ["shop", "virtual_currency", "mart", "daily"]
+}
+
+SELECT
+  *,
+  CURRENT_TIMESTAMP() AS updated_at
+FROM
+  ${ref("shop_kpis")}
+  -- ถ้ารันรายวันแบบ Incremental ให้ดึงประมวลผลย้อนหลัง 3 วัน
+  ${when(incremental(), `WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 3 DAY)`)}
