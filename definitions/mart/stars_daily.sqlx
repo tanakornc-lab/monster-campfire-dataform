@@ -1,0 +1,21 @@
+config {
+    type: "incremental",
+    name: "stars_daily",
+    schema: "analytics_mart",
+    uniqueKey: ["date", "country", "platform", "star_range"],
+    partitionBy: "date",
+    description: "Mart table for daily furniture star progression snapshot",
+    tags: ["furniture", "mart", "daily", "star_progression"]
+}
+
+SELECT
+  date,
+  country,
+  platform,
+  star_range,
+  total_users,
+  CURRENT_TIMESTAMP() AS updated_at
+FROM
+  ${ref("stars_kpis")}
+  -- สำหรับการอัปเดตรายวัน (Incremental) ดึงมาประมวลผลแค่ 3 วันล่าสุด
+  ${when(incremental(), `WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 3 DAY)`)}

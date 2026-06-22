@@ -1,0 +1,47 @@
+config {
+    type: "view",
+    name: "stars_kpis",
+    schema: "analytics_transform",
+    description: "Aggregated snapshot of user latest furniture star status grouped by ranges",
+    tags: ["furniture", "transform", "star_progression"]
+}
+
+WITH
+  base_events AS (
+  SELECT
+    *
+  FROM
+    ${ref("stars_events")} ),
+  latest_date AS (
+  SELECT
+    MAX(event_date) AS max_date
+  FROM
+    base_events ),
+  user_latest_status AS (
+  SELECT
+    user_pseudo_id,
+    country,
+    platform,
+    star_amount,
+    ROW_NUMBER() OVER (PARTITION BY user_pseudo_id ORDER BY event_timestamp DESC) AS rank
+  FROM
+    base_events )
+SELECT
+  (
+  SELECT
+    max_date
+  FROM
+    latest_date) AS date,
+  country,
+  platform,
+  CONCAT( LPAD(CAST(FLOOR((NULLIF(star_amount, 0) - 1) / 10) * 10 + 1 AS STRING), 3, '0'), '-', LPAD(CAST(FLOOR((NULLIF(star_amount, 0) - 1) / 10) * 10 + 10 AS STRING), 3, '0') ) AS star_range,
+  COUNT(DISTINCT user_pseudo_id) AS total_users
+FROM
+  user_latest_status
+WHERE
+  rank = 1
+GROUP BY
+  1,
+  2,
+  3,
+  4
