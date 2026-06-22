@@ -1,0 +1,18 @@
+config {
+    type: "incremental",
+    name: "iap_daily_summary",
+    schema: "analytics_mart",
+    uniqueKey: ["date", "item_id", "currency"],
+    /* จับคู่ Key ให้ตรงกับเงื่อนไข ON ในโค้ดเก่าเป๊ะๆ */
+    partitionBy: "date",
+    description: "Mart table for daily IAP and revenue summary",
+    tags: ["shop", "iap", "mart", "daily"]
+}
+
+SELECT
+  *,
+  CURRENT_TIMESTAMP() AS updated_at
+FROM
+  ${ref("iap_performance_kpis")}
+  -- ถ้ารันรายวันแบบ Incremental ให้ดึงประมวลผลย้อนหลัง 3 วัน
+  ${when(incremental(), `WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 3 DAY)`)}

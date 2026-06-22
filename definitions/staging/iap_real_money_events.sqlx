@@ -1,0 +1,82 @@
+config {
+    type: "view",
+    name: "iap_real_money_events",
+    schema: "analytics_staging",
+    description: "Staging view for real money in-app purchase events (view_item, purchase)",
+    tags: ["shop", "iap", "staging"]
+}
+
+SELECT
+  user_pseudo_id,
+  EXTRACT(DATE
+  FROM
+    TIMESTAMP_MICROS(event_timestamp) AT TIME ZONE 'Asia/Bangkok') AS event_date,
+  event_name,
+  COALESCE( (
+    SELECT
+      value.string_value
+    FROM
+      UNNEST(event_params)
+    WHERE
+      KEY = 'item_id'), item.item_id ) AS item_id,
+  COALESCE( (
+    SELECT
+      value.string_value
+    FROM
+      UNNEST(event_params)
+    WHERE
+      KEY = 'item_category'), item.item_category, 'Uncategorized' ) AS item_category,
+  COALESCE( (
+    SELECT
+      value.double_value
+    FROM
+      UNNEST(event_params)
+    WHERE
+      KEY = 'price'), item.price ) AS price,
+  COALESCE( (
+    SELECT
+      value.string_value
+    FROM
+      UNNEST(event_params)
+    WHERE
+      KEY = 'currency'), 'unknown'
+      /* ปรับให้คลีนขึ้นตรงนี้ครับ */
+      ) AS currency,
+  (
+  SELECT
+    value.string_value
+  FROM
+    UNNEST(event_params)
+  WHERE
+    KEY = 'transaction_id') AS transaction_id,
+  geo.country,
+  device.operating_system AS platform
+FROM
+  `monster-campfire.analytics_468762418.events_*`
+LEFT JOIN
+  UNNEST(items) AS item
+WHERE
+  _TABLE_SUFFIX >= FORMAT_DATE('%Y%m%d', DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 90 DAY))
+  AND ( ( event_name = 'view_item'
+      AND (
+      SELECT
+        value.string_value
+      FROM
+        UNNEST(event_params)
+      WHERE
+        KEY = 'currency') IS NOT NULL
+      AND (
+      SELECT
+        value.double_value
+      FROM
+        UNNEST(event_params)
+      WHERE
+        KEY = 'price') IS NOT NULL )
+    OR (event_name = 'purchase') )
+  AND (
+  SELECT
+    value.int_value
+  FROM
+    UNNEST(event_params)
+  WHERE
+    KEY = 'debug_mode') IS NULL

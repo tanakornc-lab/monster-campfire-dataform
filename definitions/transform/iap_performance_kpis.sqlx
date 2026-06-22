@@ -1,0 +1,32 @@
+config {
+    type: "view",
+    name: "iap_performance_kpis",
+    schema: "analytics_transform",
+    description: "Aggregated daily IAP performance and revenue KPIs",
+    tags: ["shop", "iap", "transform"]
+}
+
+SELECT
+  event_date AS date,
+  item_id,
+  item_category,
+  currency,
+  CAST(COUNTIF(event_name = 'view_item') AS INT64) AS total_views,
+  HLL_COUNT.INIT(
+  IF
+    (event_name = 'view_item', user_pseudo_id, NULL)) AS viewers_sketch,
+  CAST(COUNTIF(event_name = 'purchase') AS INT64) AS total_purchases,
+  HLL_COUNT.INIT(
+  IF
+    (event_name = 'purchase', user_pseudo_id, NULL)) AS purchasers_sketch,
+  SUM(
+  IF
+    (event_name = 'purchase', price, 0)) AS total_revenue,
+  HLL_COUNT.INIT(user_pseudo_id) AS total_active_users_sketch
+FROM
+  ${ref("iap_real_money_events")}
+GROUP BY
+  1,
+  2,
+  3,
+  4
