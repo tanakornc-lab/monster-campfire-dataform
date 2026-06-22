@@ -11,18 +11,40 @@ SELECT
   item_id,
   item_category,
   currency,
+  -- 1. กลุ่ม Views
   CAST(COUNTIF(event_name = 'view_item') AS INT64) AS total_views,
+  COUNT(DISTINCT
+  IF
+    (event_name = 'view_item', user_pseudo_id, NULL)) AS daily_viewers,
   HLL_COUNT.INIT(
   IF
     (event_name = 'view_item', user_pseudo_id, NULL)) AS viewers_sketch,
+  -- 2. กลุ่ม Purchases
   CAST(COUNTIF(event_name = 'purchase') AS INT64) AS total_purchases,
+  COUNT(DISTINCT
+  IF
+    (event_name = 'purchase', user_pseudo_id, NULL)) AS daily_purchasers,
   HLL_COUNT.INIT(
   IF
     (event_name = 'purchase', user_pseudo_id, NULL)) AS purchasers_sketch,
   SUM(
   IF
     (event_name = 'purchase', price, 0)) AS total_revenue,
-  HLL_COUNT.INIT(user_pseudo_id) AS total_active_users_sketch
+  -- 3. กลุ่ม Active Users
+  HLL_COUNT.INIT(user_pseudo_id) AS total_active_users_sketch,
+  -- 4. กลุ่ม Calculated Metrics (เพิ่มใหม่ตามรีเควสต์)
+  -- ARPPU = รายได้รวม / จำนวนคนเปย์ (ใช้ SAFE_DIVIDE ป้องกัน Error หารด้วย 0)
+  SAFE_DIVIDE( SUM(
+    IF
+      (event_name = 'purchase', price, 0)), COUNT(DISTINCT
+    IF
+      (event_name = 'purchase', user_pseudo_id, NULL)) ) AS daily_arppu,
+  -- Shop Conversion Rate = จำนวนคนเปย์ / จำนวนคนเข้าดูร้านค้า
+  SAFE_DIVIDE( COUNT(DISTINCT
+    IF
+      (event_name = 'purchase', user_pseudo_id, NULL)), COUNT(DISTINCT
+    IF
+      (event_name = 'view_item', user_pseudo_id, NULL)) ) AS daily_shop_conversion_rate
 FROM
   ${ref("iap_real_money_events")}
 GROUP BY
