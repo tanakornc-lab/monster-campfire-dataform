@@ -11,17 +11,34 @@ SELECT
   item_id,
   item_category,
   currency_name,
+  -- 1. กลุ่ม Views
   CAST(COUNTIF(event_name = 'view_item') AS INT64) AS total_views,
+  -- เพิ่ม: นับจำนวนคนดูแบบตัวเลขปกติ
+  COUNT(DISTINCT
+  IF
+    (event_name = 'view_item', user_pseudo_id, NULL)) AS daily_viewers,
   HLL_COUNT.INIT(
   IF
     (event_name = 'view_item', user_pseudo_id, NULL)) AS viewers_sketch,
+  -- 2. กลุ่ม Spends (Purchases)
   CAST(COUNTIF(event_name = 'spend_virtual_currency') AS INT64) AS total_spends,
+  -- เพิ่ม: นับจำนวนคนซื้อแบบตัวเลขปกติ
+  COUNT(DISTINCT
+  IF
+    (event_name = 'spend_virtual_currency', user_pseudo_id, NULL)) AS daily_spenders,
   HLL_COUNT.INIT(
   IF
     (event_name = 'spend_virtual_currency', user_pseudo_id, NULL)) AS spenders_sketch,
+  -- 3. ยอดการใช้จ่าย
   CAST(SUM(
     IF
-      (event_name = 'spend_virtual_currency', currency_value, 0)) AS INT64) AS total_currency_value
+      (event_name = 'spend_virtual_currency', currency_value, 0)) AS INT64) AS total_currency_value,
+  -- 4. Shop Conversion Rate (รายวัน) สำหรับเปิดดูในตาราง BigQuery
+  SAFE_DIVIDE( COUNT(DISTINCT
+    IF
+      (event_name = 'spend_virtual_currency', user_pseudo_id, NULL)), COUNT(DISTINCT
+    IF
+      (event_name = 'view_item', user_pseudo_id, NULL)) ) AS daily_shop_conversion_rate
 FROM
   ${ref("shop_events")}
 GROUP BY
