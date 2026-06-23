@@ -50,7 +50,7 @@ WITH
         KEY = 'player_status'), 'normal') AS player_status,
     user_first_touch_timestamp
   FROM
-    `monster-campfire.analytics_468762418.events_*`
+    `campfire-uat.analytics_470733402.events_*`
   WHERE
     -- ชดเชยเวลา UTC gap (+1 วัน) เพื่อให้ครอบคลุมเวลา Asia/Bangkok แบบ 100%
     _TABLE_SUFFIX >= FORMAT_DATE('%Y%m%d', DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 91 DAY))

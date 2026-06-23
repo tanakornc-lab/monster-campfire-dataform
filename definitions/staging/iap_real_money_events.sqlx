@@ -52,7 +52,7 @@ SELECT
   geo.country,
   device.operating_system AS platform
 FROM
-  `monster-campfire.analytics_468762418.events_*`
+  `campfire-uat.analytics_470733402.events_*`
 LEFT JOIN
   UNNEST(items) AS item
 WHERE

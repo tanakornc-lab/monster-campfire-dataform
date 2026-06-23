@@ -32,7 +32,7 @@ WITH
       AND (value.string_value IS NOT NULL
         OR value.int_value = 1) ) AS is_debug
   FROM
-    `monster-campfire.analytics_468762418.events_*`
+    `campfire-uat.analytics_470733402.events_*`
   WHERE
     event_name IN ('sign_up',
       'login')
