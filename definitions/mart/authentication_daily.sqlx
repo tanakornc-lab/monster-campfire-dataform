@@ -6,7 +6,16 @@ config {
     partitionBy: "date",
     clusterBy: ["country", "method"],
     description: "Mart table for authentication KPIs",
-    tags: ["auth", "mart", "daily"]
+    tags: ["auth", "mart", "daily"],
+    columns: {
+        date: "วันที่เกิดกิจกรรม (อิงตามเวลา Asia/Bangkok)",
+        country: "ประเทศของผู้ใช้งาน",
+        platform: "ระบบปฏิบัติการที่ใช้งาน (iOS หรือ Android)",
+        method: "ช่องทางการเข้าสู่ระบบ (เช่น Google, Facebook, Guest)",
+        total_logins: "จำนวนครั้งที่เข้าสู่ระบบทั้งหมดผ่านช่องทางนี้",
+        unique_users: "จำนวนผู้เล่นที่ไม่ซ้ำกันที่ใช้ช่องทางนี้ในการเข้าสู่ระบบ",
+        updated_at: "เวลาที่ข้อมูลในแถวนี้ถูกประมวลผลและอัปเดล่าสุด"
+    }
 }
 
 SELECT

@@ -7,7 +7,18 @@ config {
     partitionBy: "date",
     clusterBy: ["item_category", "item_id"],
     description: "Mart table for daily shop performance (virtual currency)",
-    tags: ["shop", "virtual_currency", "mart", "daily"]
+    tags: ["shop", "virtual_currency", "mart", "daily"],
+    columns: {
+        date: "วันที่เกิดรายการซื้อ (อิงตามเวลา Asia/Bangkok)",
+        item_id: "รหัสของไอเทมในร้านค้า",
+        item_name: "ชื่อของไอเทม",
+        item_category: "หมวดหมู่ของไอเทม (เช่น Power-up, Cosmetic)",
+        currency_name: "สกุลเงินในเกมที่ใช้ซื้อ (เช่น Gold, Gems)",
+        total_spent: "ยอดรวมของสกุลเงินในเกมที่ถูกใช้ไปกับไอเทมนี้",
+        units_sold: "จำนวนชิ้นของไอเทมนี้ที่ขายได้",
+        unique_purchasers: "จำนวนผู้เล่นที่ไม่ซ้ำกันที่ซื้อไอเทมนี้",
+        updated_at: "เวลาที่ข้อมูลในแถวนี้ถูกประมวลผลและอัปเดล่าสุด"
+    }
 }
 
 SELECT

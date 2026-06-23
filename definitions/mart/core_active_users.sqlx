@@ -7,7 +7,14 @@ config {
         partitionBy: "date",
         clusterBy: ["country", "os", "player_status"]
     },
-    description: "ตารางคู่ขนานระดับ User-Daily ส่งเฉพาะ User ID ให้ Looker Studio ไว้นับจำนวนคนเล่นแบบไม่ซ้ำตามกรอบเวลาทั้งหมดที่เลือก"
+    description: "ตารางคู่ขนานระดับ User-Daily ส่งเฉพาะ User ID ให้ Looker Studio ไว้นับจำนวนคนเล่นแบบไม่ซ้ำตามกรอบเวลาทั้งหมดที่เลือก",
+    columns: {
+        date: "วันที่ผู้เล่นเข้ามาใช้งาน (Active)",
+        country: "ประเทศของผู้ใช้งาน",
+        os: "ระบบปฏิบัติการที่ใช้งาน (iOS หรือ Android)",
+        player_status: "สถานะของผู้เล่น (เช่น vip, normal)",
+        resolved_user_id: "รหัสประจำตัวผู้เล่นสำหรับใช้นับ Unique Users ข้ามวัน"
+    }
 }
 
 SELECT

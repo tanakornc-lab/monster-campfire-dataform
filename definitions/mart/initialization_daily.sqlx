@@ -7,7 +7,31 @@ config {
         partitionBy: "date",
         clusterBy: ["country", "os"]
     },
-    description: "Mart layer: สรุปข้อมูล Drop-off และระยะเวลาการโหลดเข้าเกมรายวัน"
+    description: "Mart layer: สรุปข้อมูล Drop-off และระยะเวลาการโหลดเข้าเกมรายวัน",
+    columns: {
+        date: "วันที่ประมวลผลข้อมูล",
+        country: "ประเทศของผู้ใช้งาน",
+        os: "ระบบปฏิบัติการที่ใช้งาน (iOS หรือ Android)",
+        users_step_01_appsflyer: "จำนวนผู้เล่นที่ผ่านขั้นตอนโหลด #1 (AppsFlyer)",
+        users_step_02_addressable: "จำนวนผู้เล่นที่ผ่านขั้นตอนโหลด #2 (Addressable)",
+        users_step_03_bundle: "จำนวนผู้เล่นที่ผ่านขั้นตอนโหลด #3 (Bundle)",
+        users_step_04_patch: "จำนวนผู้เล่นที่ผ่านขั้นตอนโหลด #4 (Patch)",
+        users_step_05_dynamic: "จำนวนผู้เล่นที่ผ่านขั้นตอนโหลด #5 (Dynamic Content)",
+        users_step_06_service_start: "จำนวนผู้เล่นที่ผ่านขั้นตอนโหลด #6 (Service Start)",
+        users_step_07_service_finish: "จำนวนผู้เล่นที่ผ่านขั้นตอนโหลด #7 (Service Finish)",
+        users_step_08_login: "จำนวนผู้เล่นที่ผ่านขั้นตอนโหลด #8 (Login)",
+        users_step_09_signin: "จำนวนผู้เล่นที่ผ่านขั้นตอนโหลด #9 (Sign-in)",
+        users_step_10_api: "จำนวนผู้เล่นที่ผ่านขั้นตอนโหลด #10 (API Ready)",
+        users_step_11_load_data: "จำนวนผู้เล่นที่ผ่านขั้นตอนโหลด #11 (Load User Data)",
+        users_step_12_entry: "จำนวนผู้เล่นที่โหลดเข้าเกมสำเร็จ",
+        avg_sec_to_addressable: "เวลาเฉลี่ย (วินาที) ที่ใช้โหลดถึงขั้น Addressable",
+        avg_sec_to_bundle: "เวลาเฉลี่ย (วินาที) ที่ใช้โหลดถึงขั้น Bundle",
+        avg_sec_to_patch: "เวลาเฉลี่ย (วินาที) ที่ใช้โหลดถึงขั้น Patch",
+        avg_sec_to_load_data: "เวลาเฉลี่ย (วินาที) ที่ใช้โหลดถึงขั้น Load User Data",
+        avg_sec_to_entry: "เวลาเฉลี่ย (วินาที) ที่ใช้โหลดถึงขั้นเข้าเกมสำเร็จ",
+        avg_total_sec_to_entry: "เวลาเฉลี่ยรวมทั้งหมด (วินาที) ในการโหลดจนเข้าเกม",
+        updated_at: "เวลาที่ข้อมูลในแถวนี้ถูกประมวลผลและอัปเดล่าสุด"
+    }
 }
 
 SELECT

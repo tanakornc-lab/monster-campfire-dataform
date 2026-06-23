@@ -6,7 +6,18 @@ config {
     /* จับคู่ Key ให้ตรงกับเงื่อนไข ON ในโค้ดเก่าเป๊ะๆ */
     partitionBy: "date",
     description: "Mart table for daily IAP and revenue summary",
-    tags: ["shop", "iap", "mart", "daily"]
+    tags: ["shop", "iap", "mart", "daily"],
+    columns: {
+        date: "วันที่เกิดธุรกรรมการซื้อ (อิงตามเวลา Asia/Bangkok)",
+        item_id: "รหัสของสินค้าที่ซื้อด้วยเงินจริง (SKU)",
+        item_name: "ชื่อของสินค้าที่ซื้อ",
+        currency: "สกุลเงินที่ใช้ในการชำระเงิน (เช่น THB, USD)",
+        gross_revenue: "ยอดขายรวมที่ได้รับจากสินค้านี้ (ก่อนหักค่าธรรมเนียม)",
+        transactions: "จำนวนธุรกรรมทั้งหมดที่เกิดขึ้นกับสินค้านี้",
+        paying_users: "จำนวนผู้เล่นที่ไม่ซ้ำกันที่ซื้อสินค้านี้",
+        arppu: "รายได้เฉลี่ยต่อผู้เล่นที่จ่ายเงิน (Revenue / Paying Users)",
+        updated_at: "เวลาที่ข้อมูลในแถวนี้ถูกประมวลผลและอัปเดล่าสุด"
+    }
 }
 
 SELECT
