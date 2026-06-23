@@ -6,7 +6,21 @@ config {
     partitionBy: "date",
     clusterBy: ["level_name", "user_pseudo_id"],
     description: "Mart table for daily mission and sub-mission performance",
-    tags: ["mission", "mart", "daily"]
+    tags: ["mission", "mart", "daily"],
+    columns: {
+        date: "วันที่เกิดกิจกรรม (อิงตามเวลา Asia/Bangkok)",
+        country: "ประเทศของผู้ใช้งาน",
+        os: "ระบบปฏิบัติการที่ใช้งาน (iOS หรือ Android)",
+        mission_id: "รหัสของภารกิจ",
+        mission_name: "ชื่อของภารกิจ",
+        mission_type: "ประเภทของภารกิจ (เช่น ภารกิจรายวัน, ภารกิจอีเวนต์)",
+        mission_starters: "จำนวนผู้เล่นที่ไม่ซ้ำกันที่เริ่มต้นทำภารกิจนี้",
+        mission_completers: "จำนวนผู้เล่นที่ไม่ซ้ำกันที่ทำภารกิจนี้สำเร็จ",
+        completion_rate: "อัตราส่วนของผู้เล่นที่ทำภารกิจสำเร็จเทียบกับผู้ที่เริ่มต้นทั้งหมด (%)",
+        avg_attempts: "จำนวนครั้งโดยเฉลี่ยที่ผู้เล่นใช้ในการพยายามทำภารกิจจนสำเร็จ",
+        total_rewards_claimed: "จำนวนรางวัลทั้งหมดที่ถูกกดรับจากภารกิจนี้",
+        updated_at: "เวลาที่ข้อมูลในแถวนี้ถูกประมวลผลและอัปเดล่าสุด"
+    }
 }
 
 SELECT

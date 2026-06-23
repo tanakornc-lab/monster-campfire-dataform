@@ -5,7 +5,16 @@ config {
     uniqueKey: ["date"],
     partitionBy: "date",
     description: "Mart table for daily invite friend performance",
-    tags: ["invite", "mart", "daily"]
+    tags: ["invite", "mart", "daily"],
+    columns: {
+        date: "วันที่เกิดกิจกรรม (อิงตามเวลา Asia/Bangkok)",
+        invites_sent: "จำนวนคำเชิญเพื่อนทั้งหมดที่ถูกส่งออกไปในวันนั้น",
+        unique_inviters: "จำนวนผู้เล่นที่ไม่ซ้ำกันที่ส่งคำเชิญอย่างน้อย 1 ครั้ง",
+        invites_accepted: "จำนวนคำเชิญทั้งหมดที่ได้รับการตอบรับ (มีเพื่อนใหม่เข้ามาเล่น)",
+        new_users_from_invite: "จำนวนผู้เล่นใหม่ที่สมัครเกมผ่านคำเชิญในวันนั้น",
+        conversion_rate: "อัตราการตอบรับคำเชิญ (%)",
+        updated_at: "เวลาที่ข้อมูลในแถวนี้ถูกประมวลผลและอัปเดล่าสุด"
+    }
 }
 
 SELECT

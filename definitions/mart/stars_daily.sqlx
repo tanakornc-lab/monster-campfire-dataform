@@ -5,7 +5,15 @@ config {
     uniqueKey: ["date", "country", "platform", "star_range"],
     partitionBy: "date",
     description: "Mart table for daily furniture star progression snapshot",
-    tags: ["furniture", "mart", "daily", "star_progression"]
+    tags: ["furniture", "mart", "daily", "star_progression"],
+    columns: {
+        date: "วันที่ประมวลผลข้อมูล",
+        country: "ประเทศของผู้ใช้งาน",
+        platform: "แพลตฟอร์มที่ใช้งาน (เช่น iOS, Android)",
+        star_range: "ช่วงของดาวที่ผู้เล่นมี (เช่น '0-100', '101-500')",
+        total_users: "จำนวนผู้เล่นทั้งหมดที่อยู่ในช่วงดาวนั้นๆ ณ สิ้นวัน",
+        updated_at: "เวลาที่ข้อมูลในแถวนี้ถูกประมวลผลและอัปเดล่าสุด"
+    }
 }
 
 SELECT

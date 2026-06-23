@@ -6,7 +6,18 @@ config {
     partitionBy: "date",
     clusterBy: ["country", "platform", "tutorial_name"],
     description: "Mart table for tutorial performance (Incremental Update)",
-    tags: ["tutorial", "mart", "daily"]
+    tags: ["tutorial", "mart", "daily"],
+    columns: {
+        date: "วันที่เกิดกิจกรรม (อิงตามเวลา Asia/Bangkok)",
+        country: "ประเทศของผู้ใช้งาน",
+        platform: "แพลตฟอร์มที่ใช้งาน (เช่น iOS, Android)",
+        tutorial_name: "ชื่อของบทเรียนสอนเล่น",
+        starters: "จำนวนผู้เล่นที่ไม่ซ้ำกันที่เริ่มต้นบทเรียนนี้",
+        completers: "จำนวนผู้เล่นที่ไม่ซ้ำกันที่เล่นจบบทเรียนนี้",
+        completion_rate: "อัตราส่วนของผู้เล่นที่เล่นจบบทเรียน (%)",
+        avg_duration_sec: "เวลาเฉลี่ย (วินาที) ที่ผู้เล่นใช้ในบทเรียนนี้",
+        updated_at: "เวลาที่ข้อมูลในแถวนี้ถูกประมวลผลและอัปเดล่าสุด"
+    }
 }
 
 SELECT
