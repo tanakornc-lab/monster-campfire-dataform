@@ -52,7 +52,7 @@ SELECT
   geo.country,
   device.operating_system AS platform
 FROM
-  `monster-campfire.analytics_468762418.events_*`
+  `${dataform.projectConfig.vars.ga4_dataset}.events_*`
 LEFT JOIN
   UNNEST(items) AS item
 WHERE

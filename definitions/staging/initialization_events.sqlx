@@ -38,7 +38,7 @@ SELECT
     WHERE
       KEY = 'time_since_startup') AS FLOAT64) AS time_since_startup
 FROM
-  `monster-campfire.analytics_468762418.events_*`
+  `${dataform.projectConfig.vars.ga4_dataset}.events_*`
 WHERE
   _TABLE_SUFFIX >= FORMAT_DATE('%Y%m%d', DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 90 DAY))
   AND event_name = 'initial_event'

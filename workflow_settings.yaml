@@ -3,3 +3,5 @@ defaultLocation: "asia-southeast1"
 defaultDataset: dataform
 defaultAssertionDataset: dataform_assertions
 dataformCoreVersion: 3.0.52
+vars:
+  ga4_dataset: "monster-campfire.analytics_468762418"
