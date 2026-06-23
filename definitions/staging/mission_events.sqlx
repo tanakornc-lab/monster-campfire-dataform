@@ -43,7 +43,7 @@ IF
           KEY = 'success') AS STRING) ) IN ('true',
       '1'), 1, 0 ) AS is_success
 FROM
-  `campfire-uat.analytics_470733402.events_*`
+  `monster-campfire.analytics_468762418.events_*`
 WHERE
   _TABLE_SUFFIX >= FORMAT_DATE('%Y%m%d', DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 90 DAY))
   AND event_name = 'level_end'

@@ -43,7 +43,7 @@ SELECT
       KEY = 'result'), 'unknown' ) AS result_status,
   DATE(TIMESTAMP_MICROS(NULLIF(user_first_touch_timestamp, 0)), 'Asia/Bangkok') AS first_touch_date
 FROM
-  `campfire-uat.analytics_470733402.events_*`
+  `monster-campfire.analytics_468762418.events_*`
 WHERE
   _TABLE_SUFFIX >= FORMAT_DATE('%Y%m%d', DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL 90 DAY))
   AND ( (event_name = 'share'
